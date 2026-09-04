@@ -46,10 +46,27 @@ It's laid out as a family register rather than an org chart:
 | `∗` | born |
 | `†` | died — the card is shaded too |
 | `⚭` | married, with the year beneath |
+| `c.` | approximate — "c. 1910" |
 | `⚮` | divorced or separated |
 | `◇` | partners |
 
 Roman numerals down the left gutter mark each generation.
+
+## Dates
+
+Give someone a full **date of birth** and it is kept and used — but nothing
+forces you to. Dates are free text, read for whatever precision is there:
+
+`12 Mar 1948` · `12 March 1948` · `12/3/1948` (day first) · `1948-03-12` ·
+`Mar 1948` · `1948` · `c. 1910` · `abt 1905`
+
+As you type, the panel echoes back how it was read, so a vague entry is never a
+mystery. It also shows the **age** — years so far for the living, age at death
+for those who have died, marked *about* when only a year is known.
+
+The calendar button beside the zoom controls switches the chart between years
+only and full dates. Full dates are also what siblings are sorted by, so two
+children born in the same year fall in the right order.
 
 **People who married in** are drawn a step back — smaller, lighter type, no
 generation stripe — so the line of descent reads first and the in-laws stay

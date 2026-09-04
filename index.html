@@ -686,6 +686,7 @@ kbd{
       <div class="bar-sep" style="height:18px;margin:0 3px"></div>
       <button id="tPhoto" title="Card detail" aria-label="Card detail"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.2" y="3.5" width="11.6" height="9" rx="1.4"/><circle cx="5.6" cy="7" r="1.3"/><path d="M2.6 11.4 6 8.9l2.2 1.7M9.4 6.5h3M9.4 9h3" stroke-linecap="round"/></svg></button>
       <button id="tGens" title="Generation bands" aria-pressed="true" aria-label="Generation bands"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12" stroke-dasharray="1 3"/></svg></button>
+      <button id="tDates" title="Show full dates" aria-pressed="false" aria-label="Show full dates"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.2" y="3.4" width="11.6" height="10.4" rx="1.5"/><path d="M2.2 6.6h11.6M5.4 1.8v2.4M10.6 1.8v2.4" stroke-linecap="round"/><path d="M5 9.4h2M9 9.4h2M5 11.6h2" stroke-linecap="round"/></svg></button>
       <button id="tInlaw" title="Play down people who married in" aria-pressed="true" aria-label="Play down people who married in"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="5.6" cy="6" r="2.5"/><path d="M1.6 13.4a4 4 0 0 1 8 0" stroke-linecap="round"/><circle cx="11.6" cy="6" r="2.1" stroke-dasharray="1.6 1.7"/><path d="M8.9 13.4a3.4 3.4 0 0 1 5.5-2.7" stroke-linecap="round" stroke-dasharray="1.6 1.7"/></svg></button>
     </div>
 
@@ -772,7 +773,7 @@ const KEY = "heirloom.v1";
 let S = blankDoc();
 let ui = {
   view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
-  softInlaw:true, z:1, tx:0, ty:0, query:"", isSample:false, dirty:false
+  softInlaw:true, dates:"year", z:1, tx:0, ty:0, query:"", isSample:false, dirty:false
 };
 let LAY = null;                 // last computed layout
 let INLAW = {};                 // pid -> true for people who married in
@@ -801,12 +802,85 @@ function yearOf(v){
   const m = String(v).match(/\b(1\d{3}|20\d{2})\b/);
   return m ? m[1] : String(v).trim();
 }
-function lifeLine(p){
-  const b = yearOf(p.birth), d = yearOf(p.death);
+
+const MON_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const MON_LONG  = ["January","February","March","April","May","June",
+                   "July","August","September","October","November","December"];
+const APPROX_RE = /^(c\.?|ca\.?|circa|abt\.?|about|approx\.?|~)\s*/i;
+/**
+ * Dates stay free text — a family knows "1948" or "c. 1910" far more often
+ * than an exact day — but whatever they type is read for a day and month
+ * when one is there. Day comes first in an all-numeric date (12/3/1948),
+ * unless the numbers say otherwise.
+ */
+function parseDate(v){
+  const s = String(v == null ? "" : v).trim();
+  if(!s) return null;
+  const approx = APPROX_RE.test(s);
+  const t = s.replace(APPROX_RE, "").trim();
+  const Y = "(1\\d{3}|20\\d{2})";
+  let m;
+  if((m = t.match(new RegExp("^" + Y + "[-/.](\\d{1,2})(?:[-/.](\\d{1,2}))?$"))))
+    return {y:+m[1], m:+m[2] || null, d:m[3] ? +m[3] : null, approx};
+  if((m = t.match(new RegExp("^(\\d{1,2})[-/.](\\d{1,2})[-/.]" + Y + "$")))){
+    let d = +m[1], mo = +m[2];
+    if(d <= 12 && mo > 12){ const t2 = d; d = mo; mo = t2; }   // clearly month-first
+    return (mo >= 1 && mo <= 12 && d >= 1 && d <= 31)
+      ? {y:+m[3], m:mo, d, approx} : {y:+m[3], m:null, d:null, approx};
+  }
+  if((m = t.match(new RegExp("^(\\d{1,2})[-/.]" + Y + "$"))) && +m[1] <= 12)
+    return {y:+m[2], m:+m[1], d:null, approx};
+  const word = t.match(/[A-Za-z]{3,}/);
+  if(word){
+    const mi = MON_SHORT.map(x => x.toLowerCase()).indexOf(word[0].slice(0, 3).toLowerCase());
+    const yy = t.match(new RegExp("\\b" + Y + "\\b"));
+    if(mi >= 0 && yy){
+      const day = t.replace(yy[0], " ").match(/\b(\d{1,2})\b/);
+      return {y:+yy[1], m:mi + 1, d:day && +day[1] <= 31 ? +day[1] : null, approx};
+    }
+  }
+  const yy = t.match(new RegExp("\\b" + Y + "\\b"));
+  return yy ? {y:+yy[1], m:null, d:null, approx} : null;
+}
+/** style: "year" · "short" (12 Mar 1948) · "long" (12 March 1948) */
+function fmtDate(d, style){
+  if(!d) return "";
+  const pre = d.approx ? "c. " : "";
+  if(style !== "year" && d.m){
+    const mn = (style === "long" ? MON_LONG : MON_SHORT)[d.m - 1];
+    return pre + (d.d ? d.d + " " : "") + mn + " " + d.y;
+  }
+  return pre + d.y;
+}
+function dateStyle(){ return ui.dates === "full" ? "short" : "year"; }
+function lifeLine(p, style){
+  style = style || dateStyle();
+  const b = fmtDate(parseDate(p.birth), style);
+  const d = fmtDate(parseDate(p.death), style);
   if(b && d) return "∗" + b + "  †" + d;
   if(b) return "∗" + b;
   if(d) return "†" + d;
   return p.dead ? "†" : "";
+}
+/** Sort key that respects a full date when there is one. */
+function birthKey(pid){
+  const d = parseDate(P(pid) ? P(pid).birth : "");
+  return d ? d.y * 10000 + (d.m || 0) * 100 + (d.d || 0) : 99999999;
+}
+const byBirth = (a, b) => birthKey(a) - birthKey(b);
+/** Years lived, or years so far. Inexact when only a year is known. */
+function ageOf(p){
+  const b = parseDate(p.birth);
+  if(!b) return null;
+  const d = parseDate(p.death);
+  if(!d && p.dead) return null;
+  const start = new Date(b.y, (b.m || 7) - 1, b.d || 1);
+  const end = d ? new Date(d.y, (d.m || 7) - 1, d.d || 1) : new Date();
+  let a = end.getFullYear() - start.getFullYear();
+  const mo = end.getMonth() - start.getMonth();
+  if(mo < 0 || (mo === 0 && end.getDate() < start.getDate())) a--;
+  if(a < 0 || a > 125) return null;
+  return {years:a, dead:!!d, exact: !!(b.m && (!d || d.m)) && !b.approx};
 }
 function isDead(p){ return !!(p.death || p.dead); }
 function initials(p){
@@ -939,7 +1013,7 @@ function layout(o){
     roots = [ui.focus];
   } else {
     roots = ids.filter(id => !idx[id].childOf);
-    roots.sort((a,b) => (parseInt(yearOf(P(a).birth)) || 9999) - (parseInt(yearOf(P(b).birth)) || 9999));
+    roots.sort(byBirth);
     if(!roots.length) roots = [ids[0]];
   }
 
@@ -1004,7 +1078,7 @@ function build(pid, depth, ctx){
       if(S.people[k] && ctx.placed.has(k)) ctx.cross.push({kind:"child", uid:m.uid, child:k});
     });
     if(!kids.length || depth >= MAX_DEPTH) continue;
-    kids.sort((a,b) => (parseInt(yearOf(P(a).birth)) || 9999) - (parseInt(yearOf(P(b).birth)) || 9999));
+    kids.sort(byBirth);
     const blocks = [];
     let gw = 0;
     for(const k of kids){
@@ -1681,7 +1755,6 @@ function sector(cx, cy, ri, ro, a0, a1){
        + `L${r1(x3)} ${r1(y3)} A${r1(ro)} ${r1(ro)} 0 ${big} 0 ${r1(x4)} ${r1(y4)} Z`;
 }
 const upsideDown = a => { const m = ((a % 360) + 360) % 360; return m > 90 && m < 270; };
-const byBirth = (a, b) => (parseInt(yearOf(P(a).birth)) || 9999) - (parseInt(yearOf(P(b).birth)) || 9999);
 
 /* ── TREE ──────────────────────────────────────────────────
    The same layout engine, drawn as a thing that grew: the
@@ -2008,7 +2081,9 @@ function timeView(pal){
   for(const id in S.people){
     if(depth[id] == null) continue;
     const p = P(id);
-    const b = parseInt(yearOf(p.birth)), d = parseInt(yearOf(p.death));
+    const bd = parseDate(p.birth), dd = parseDate(p.death);
+    const b = bd ? bd.y + (bd.m ? (bd.m - 1) / 12 : 0) : 0;   // months nudge the bar
+    const d = dd ? dd.y + (dd.m ? (dd.m - 1) / 12 : 0) : 0;
     if(!b && !d){ undated.push(id); continue; }
     rows.push({pid:id, b: b || (d - 65), d: d || NOW, est: !b,
                living: !d && !p.dead, depth: depth[id], soft: softly(id)});
@@ -2059,7 +2134,7 @@ function timeView(pal){
     const nsz = r.soft ? 10.5 : 11.5;
     dl.push({t:"text", x:-14, y:by + 11.5, s:fitTo(fullName(p), LW - 24, nsz, "ui", r.soft ? 400 : 500),
              size:nsz, weight:r.soft ? 400 : 500, fill:r.soft ? pal.ink2 : pal.ink, anchor:"end"});
-    const label = (r.est ? "c." : "") + r.b + (r.living ? "–" : "–" + r.d);
+    const label = (r.est ? "c." : "") + Math.floor(r.b) + (r.living ? "–" : "–" + Math.floor(r.d));
     if(w > measure(label, 9.5, "mono") + 16)
       dl.push({t:"text", x:x0 + 8, y:by + 11, s:label, size:9.5, fam:"mono", fill:pal.ink2});
     if(r.living)
@@ -2254,7 +2329,7 @@ function renderRail(){
   let html = "";
   for(const d of keys){
     const rows = groups.get(d).sort((a,b) =>
-      (parseInt(yearOf(P(a).birth)) || 9999) - (parseInt(yearOf(P(b).birth)) || 9999) ||
+      byBirth(a, b) ||
       fullName(P(a)).localeCompare(fullName(P(b))));
     const label = d === 999 ? "Not on this chart"
       : (LAY && LAY.ancestors ? (ANC_LABELS[d] || "Earlier") : "Generation " + roman(d + 1));
@@ -2316,15 +2391,21 @@ function renderInspector(){
 
   <fieldset><legend>Life</legend>
     <div class="fgrid two">
-      <label class="f"><span>Born</span><input data-fld="birth" value="${esc(p.birth)}" placeholder="1948" autocomplete="off"></label>
-      <label class="f"><span>Died</span><input data-fld="death" value="${esc(p.death)}" placeholder="2011" autocomplete="off"></label>
+      <label class="f"><span>Date of birth</span>
+        <input data-fld="birth" value="${esc(p.birth)}" placeholder="12 Mar 1948" autocomplete="off">
+        <span class="hint" data-echo="birth">${esc(dateEcho(p.birth))}</span></label>
+      <label class="f"><span>Date of death</span>
+        <input data-fld="death" value="${esc(p.death)}" placeholder="1994" autocomplete="off">
+        <span class="hint" data-echo="death">${esc(dateEcho(p.death))}</span></label>
     </div>
     <div class="fgrid" style="margin-top:9px">
       <label class="f"><span>Place</span><input data-fld="place" value="${esc(p.place)}" placeholder="Nagpur" autocomplete="off"></label>
       <label class="f"><span>Occupation</span><input data-fld="occupation" value="${esc(p.occupation)}" placeholder="Schoolteacher" autocomplete="off"></label>
       <label class="f"><span>Notes</span><textarea data-fld="notes" placeholder="Stories, anecdotes, anything worth keeping.">${esc(p.notes)}</textarea></label>
     </div>
-    <div class="hint mono" style="font-size:10.5px;color:var(--ink-3);margin-top:5px">Dates can be anything — “1948”, “Mar 1948”, “c. 1910”.</div>
+    <div class="hint mono" style="font-size:10.5px;color:var(--ink-3);margin-top:5px">
+      A full date, or as much as anyone remembers — 12 Mar 1948, 12/3/1948
+      (day first), Mar 1948, 1948, c. 1910.</div>
   </fieldset>
 
   <fieldset><legend>Photo</legend>
@@ -2373,7 +2454,7 @@ function renderInspector(){
   html += `<fieldset><legend>Children</legend><div class="rel">`;
   const kids = info.kids;
   if(kids.length){
-    kids.sort((a,b) => (parseInt(yearOf(P(a).birth)) || 9999) - (parseInt(yearOf(P(b).birth)) || 9999));
+    kids.sort(byBirth);
     for(const k of kids) html += relRow(k, "child");
   } else {
     html += `<div class="rel-none">No children recorded.</div>`;
@@ -2390,8 +2471,19 @@ function renderInspector(){
   $("#inspBody").innerHTML = html;
 }
 function inspSub(p){
-  $("#ihSub").innerHTML = esc(lifeLine(p) || "dates unknown")
+  const a = ageOf(p);
+  const age = a ? (a.dead ? "died aged " : "") + (a.exact ? "" : "about ") + a.years
+                + (a.dead ? "" : " years old") : "";
+  $("#ihSub").innerHTML = esc(lifeLine(p, "short") || "dates unknown")
+    + (age ? ` &nbsp;·&nbsp; <span style="color:var(--ink-3)">${esc(age)}</span>` : "")
     + (INLAW[p.id] ? `<br><span class="tag-inlaw">married in</span>` : "");
+}
+/** Echo back how a typed date was read, so vague entries are not a mystery. */
+function dateEcho(v){
+  const d = parseDate(v);
+  if(!d) return String(v || "").trim() ? "not recognised as a date — kept as typed" : "";
+  if(!d.m) return "read as the year " + d.y + (d.approx ? ", approximate" : "");
+  return "read as " + fmtDate(d, "long");
 }
 function relRow(id, kind, uid){
   const p = P(id); if(!p) return "";
@@ -2419,6 +2511,10 @@ $("#inspBody").addEventListener("input", e => {
   scheduleRedraw();
   $("#ihName").textContent = fullName(p);
   inspSub(p);
+  if(f === "birth" || f === "death"){
+    const echo = $(`[data-echo="${f}"]`, $("#inspBody"));
+    if(echo) echo.textContent = dateEcho(e.target.value);
+  }
 });
 /** Typing should feel instant, so the chart catches up a beat later. */
 let redrawTimer = null;
@@ -3823,8 +3919,9 @@ function templateSheets(){
     ["", "Sulochana Kale; Anita Rao"],
     ["Married", "The year, matched to the partners in the same order: 1968; 1990"],
     ["Divorced", "yes (or leave blank). Same order as the partners."],
-    ["Born / Died", "Anything readable — 1948, Mar 1948, c. 1910. Formatting the"],
-    ["", "column as Text stops Excel turning years into dates."],
+    ["Born / Died", "A full date if you have it — 12 Mar 1948 or 12/3/1948 (day"],
+    ["", "first) — or as much as anyone remembers: Mar 1948, 1948, c. 1910."],
+    ["", "Formatting the column as Text stops Excel reformatting what you type."],
     ["Sex", "M, F, or leave blank."],
     ["ID", "Leave blank. It is filled in when you export, so a sheet can go"],
     ["", "out to the family, come back edited, and merge without duplicates."],
@@ -4160,7 +4257,7 @@ function save(){
     try {
       localStorage.setItem(KEY, JSON.stringify({data:S, ui:{
         view:ui.view, mode:ui.mode, focus:ui.focus, style:ui.style,
-        gens:ui.gens, softInlaw:ui.softInlaw, isSample:ui.isSample
+        gens:ui.gens, softInlaw:ui.softInlaw, dates:ui.dates, isSample:ui.isSample
       }}));
     } catch(e){
       toast("Browser storage is full — save a family file", true);
@@ -4305,9 +4402,9 @@ function setMode(m){
     const idx = buildIndex(), ids = Object.keys(S.people);
     if(ids.length){
       ui.focus = m === "anc"
-        ? ids.slice().sort((a,b) => (parseInt(yearOf(P(b).birth))||0) - (parseInt(yearOf(P(a).birth))||0))[0]
+        ? ids.slice().sort((a,b) => byBirth(b, a))[0]
         : ids.filter(id => !idx[id].childOf).sort((a,b) =>
-            (parseInt(yearOf(P(a).birth))||9999) - (parseInt(yearOf(P(b).birth))||9999))[0] || ids[0];
+            byBirth(a, b))[0] || ids[0];
     }
   }
   save();
@@ -4361,6 +4458,12 @@ $("#tGens").addEventListener("click", e => {
   ui.gens = !ui.gens;
   e.currentTarget.setAttribute("aria-pressed", ui.gens);
   save(); drawChart();
+});
+$("#tDates").addEventListener("click", e => {
+  ui.dates = ui.dates === "full" ? "year" : "full";
+  e.currentTarget.setAttribute("aria-pressed", ui.dates === "full");
+  save(); render();
+  toast(ui.dates === "full" ? "Full dates, where they are known" : "Years only");
 });
 $("#tInlaw").addEventListener("click", e => {
   ui.softInlaw = !ui.softInlaw;
@@ -4420,6 +4523,9 @@ function helpDialog(){
           <b style="color:var(--brass)">⚮</b> divorced or separated &nbsp;·&nbsp;
           <b style="color:var(--brass)">◇</b> partners<br>
           <b>∗</b> born &nbsp;·&nbsp; <b>†</b> died — a shaded card means the person has died.<br>
+          Dates take a full <b>date of birth</b> or just as much as anyone remembers.
+          The calendar button by the zoom controls switches between years and full dates;
+          the panel always shows the whole date and the age.<br>
           People who <b>married in</b> are set smaller and lighter, so the line of descent
           reads first. The last button by the zoom controls turns that off.<br>
           Roman numerals down the left mark each generation.
@@ -4473,23 +4579,23 @@ function loadSample(){
   S = blankDoc();
   const mk = (first, last, o) => addPerson(Object.assign({first, last}, o||{}));
 
-  const hari    = mk("Hari Prasad","Deshmukh",{birth:"1918",death:"1994",sex:"M",place:"Nagpur",occupation:"Railway clerk"});
-  const kamala  = mk("Kamala","Deshmukh",{maiden:"Joshi",birth:"1923",death:"2005",sex:"F",place:"Nagpur",occupation:"Schoolteacher"});
+  const hari    = mk("Hari Prasad","Deshmukh",{birth:"14 Aug 1918",death:"2 Nov 1994",sex:"M",place:"Nagpur",occupation:"Railway clerk"});
+  const kamala  = mk("Kamala","Deshmukh",{maiden:"Joshi",birth:"9 Jan 1923",death:"17 Jun 2005",sex:"F",place:"Nagpur",occupation:"Schoolteacher"});
   const u1      = addUnion(hari, kamala, {date:"1941", place:"Nagpur"});
 
-  const vasant  = mk("Vasant","Deshmukh",{birth:"1943",death:"2019",sex:"M",place:"Nagpur",occupation:"Civil engineer"});
-  const malati  = mk("Malati","Apte",{maiden:"Deshmukh",birth:"1946",sex:"F",place:"Pune",occupation:"Doctor"});
-  const anil    = mk("Anil","Deshmukh",{birth:"1951",sex:"M",place:"Delhi",occupation:"Bank manager"});
+  const vasant  = mk("Vasant","Deshmukh",{birth:"27 Mar 1943",death:"8 Feb 2019",sex:"M",place:"Nagpur",occupation:"Civil engineer"});
+  const malati  = mk("Malati","Apte",{maiden:"Deshmukh",birth:"3 Dec 1946",sex:"F",place:"Pune",occupation:"Doctor"});
+  const anil    = mk("Anil","Deshmukh",{birth:"21 Sep 1951",sex:"M",place:"Delhi",occupation:"Bank manager"});
   U(u1).children.push(vasant, malati, anil);
 
   const sulo    = mk("Sulochana","Deshmukh",{maiden:"Kale",birth:"1947",sex:"F",place:"Nagpur",occupation:"Homemaker"});
   const u2      = addUnion(vasant, sulo, {date:"1968", place:"Nagpur"});
   const ramesh  = mk("Ramesh","Apte",{birth:"1942",death:"2016",sex:"M",place:"Pune",occupation:"Advocate"});
   const u3      = addUnion(malati, ramesh, {date:"1970", place:"Pune"});
-  const nirmala = mk("Nirmala","Deshmukh",{maiden:"Bhide",birth:"1955",sex:"F",place:"Delhi",occupation:"Librarian"});
+  const nirmala = mk("Nirmala","Deshmukh",{maiden:"Bhide",birth:"c. 1955",sex:"F",place:"Delhi",occupation:"Librarian"});
   const u4      = addUnion(anil, nirmala, {date:"1979", place:"Delhi"});
 
-  const prakash = mk("Prakash","Deshmukh",{birth:"1970",sex:"M",place:"Pune",occupation:"Architect"});
+  const prakash = mk("Prakash","Deshmukh",{birth:"6 May 1970",sex:"M",place:"Pune",occupation:"Architect"});
   const meera   = mk("Meera","Sheikh",{maiden:"Deshmukh",birth:"1973",sex:"F",place:"Bengaluru",occupation:"Journalist"});
   U(u2).children.push(prakash, meera);
 
@@ -4510,12 +4616,12 @@ function loadSample(){
   const aisha   = mk("Aisha","Deshmukh",{maiden:"Qureshi",birth:"1984",sex:"F",place:"Delhi",occupation:"Radiologist"});
   const u8      = addUnion(rohit, aisha, {date:"2011", place:"Delhi"});
 
-  U(u5).children.push(mk("Aarav","Deshmukh",{birth:"2002",sex:"M",place:"Pune",occupation:"Student"}),
+  U(u5).children.push(mk("Aarav","Deshmukh",{birth:"18 Jul 2002",sex:"M",place:"Pune",occupation:"Student"}),
                       mk("Diya","Deshmukh",{birth:"2005",sex:"F",place:"Pune",occupation:"Student"}));
   U(u6).children.push(mk("Zoya","Sheikh",{birth:"2004",sex:"F",place:"Bengaluru",occupation:"Student"}));
   U(u7).children.push(mk("Vivaan","Iyer",{birth:"2003",sex:"M",place:"Chennai"}),
                       mk("Anya","Iyer",{birth:"2007",sex:"F",place:"Chennai"}));
-  U(u8).children.push(mk("Kiaan","Deshmukh",{birth:"2014",sex:"M",place:"Delhi"}));
+  U(u8).children.push(mk("Kiaan","Deshmukh",{birth:"29 Oct 2014",sex:"M",place:"Delhi"}));
 
   S.meta = {title:"The Deshmukh Family", subtitle:"Four generations, 1918–2024",
             note:"Compiled for the Diwali gathering"};
@@ -4553,6 +4659,7 @@ function loadSample(){
   }
   $("#tGens").setAttribute("aria-pressed", !!ui.gens);
   $("#tInlaw").setAttribute("aria-pressed", !!ui.softInlaw);
+  $("#tDates").setAttribute("aria-pressed", ui.dates === "full");
 
   /* redraw once the register faces land, so text measurement is right */
   if(document.fonts && document.fonts.ready){
