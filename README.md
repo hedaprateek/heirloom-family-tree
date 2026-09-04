@@ -51,6 +51,14 @@ It's laid out as a family register rather than an org chart:
 
 Roman numerals down the left gutter mark each generation.
 
+**People who married in** are drawn a step back — smaller, lighter type, no
+generation stripe — so the line of descent reads first and the in-laws stay
+legible without competing with it. Who counts as married-in is worked out from
+the chart itself: anyone reached as a partner rather than by descent from
+whoever the chart is drawn around. Change the focus person and it re-reckons.
+The last button beside the zoom controls turns the effect off and shows
+everyone the same.
+
 ## Printing
 
 The print dialog shows a live sheet preview with the page grid drawn over the

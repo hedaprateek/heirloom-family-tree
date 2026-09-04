@@ -183,6 +183,13 @@ button{cursor:pointer;background:none;border:0;padding:0}
 .prow .av img{width:100%;height:100%;object-fit:cover}
 .prow .nm{font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .prow .dt{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-3);white-space:nowrap}
+.prow.inlaw .nm{font-size:12px;font-weight:400;color:var(--ink-2)}
+.prow.inlaw .av{opacity:.62}
+.tag-inlaw{
+  display:inline-block;margin-top:4px;padding:1px 7px;border-radius:999px;
+  background:var(--panel-3);color:var(--ink-3);
+  font-family:var(--f-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+}
 .prow .txt{min-width:0;flex:1}
 .rail-empty{padding:26px 14px;color:var(--ink-3);font-size:12.5px;text-align:center;line-height:1.6}
 
@@ -442,6 +449,10 @@ kbd{
 #chart .uyear{fill:var(--brass);font:400 9.5px var(--f-mono);text-anchor:middle;opacity:.95}
 #chart .genrule{stroke:var(--line);stroke-width:1;stroke-dasharray:1 5;stroke-linecap:round;opacity:.9}
 #chart .genlab{fill:var(--ink-3);font:400 10px var(--f-mono);letter-spacing:.18em}
+/* people who married in: still legible, deliberately a shade back */
+#chart .inlaw .card-bg{fill:var(--card-2);stroke:var(--line)}
+#chart .inlaw .nm{fill:var(--ink-2)}
+#chart .inlaw .dt,#chart .inlaw .mt,#chart .inlaw .nm-sm{fill:var(--ink-3)}
 #chart .node{cursor:pointer}
 #chart .node:hover .card-bg{stroke:var(--accent-ring)}
 /* the display-list views hit-test through invisible shapes laid over the drawing */
@@ -479,6 +490,9 @@ kbd{
 }
 #printRoot .card-bg{fill:var(--card);stroke:var(--line-2);stroke-width:1}
 #printRoot .card-bg.dead{fill:var(--card-2)}
+#printRoot .inlaw .card-bg{fill:var(--card-2);stroke:var(--line)}
+#printRoot .inlaw .nm{fill:var(--ink-2)}
+#printRoot .inlaw .dt,#printRoot .inlaw .mt,#printRoot .inlaw .nm-sm{fill:var(--ink-3)}
 #printRoot .card-sel{display:none}
 #printRoot .stripe{fill:var(--accent);opacity:.34}
 #printRoot .nm{fill:var(--ink);font:600 13px var(--f-ui)}
@@ -504,6 +518,9 @@ kbd{
   --line:#D3D3C6;--line-2:#B4B4A4;--accent:#3D6A54;--accent-ring:#8FB6A2;--brass:#96671F;--brass-tint:#F0E5CF}
 .sheetprev .card-bg{fill:var(--card);stroke:var(--line-2)}
 .sheetprev .card-bg.dead{fill:var(--card-2)}
+.sheetprev .inlaw .card-bg{fill:var(--card-2);stroke:var(--line)}
+.sheetprev .inlaw .nm{fill:var(--ink-2)}
+.sheetprev .inlaw .dt,.sheetprev .inlaw .mt{fill:var(--ink-3)}
 .sheetprev .card-sel{display:none}
 .sheetprev .stripe{fill:var(--accent);opacity:.34}
 .sheetprev .nm{fill:var(--ink);font:600 13px var(--f-ui)}
@@ -669,6 +686,7 @@ kbd{
       <div class="bar-sep" style="height:18px;margin:0 3px"></div>
       <button id="tPhoto" title="Card detail" aria-label="Card detail"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.2" y="3.5" width="11.6" height="9" rx="1.4"/><circle cx="5.6" cy="7" r="1.3"/><path d="M2.6 11.4 6 8.9l2.2 1.7M9.4 6.5h3M9.4 9h3" stroke-linecap="round"/></svg></button>
       <button id="tGens" title="Generation bands" aria-pressed="true" aria-label="Generation bands"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12" stroke-dasharray="1 3"/></svg></button>
+      <button id="tInlaw" title="Play down people who married in" aria-pressed="true" aria-label="Play down people who married in"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="5.6" cy="6" r="2.5"/><path d="M1.6 13.4a4 4 0 0 1 8 0" stroke-linecap="round"/><circle cx="11.6" cy="6" r="2.1" stroke-dasharray="1.6 1.7"/><path d="M8.9 13.4a3.4 3.4 0 0 1 5.5-2.7" stroke-linecap="round" stroke-dasharray="1.6 1.7"/></svg></button>
     </div>
 
     <div class="credit">Stunity tech — by Prateek</div>
@@ -754,10 +772,12 @@ const KEY = "heirloom.v1";
 let S = blankDoc();
 let ui = {
   view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
-  z:1, tx:0, ty:0, query:"", isSample:false, dirty:false
+  softInlaw:true, z:1, tx:0, ty:0, query:"", isSample:false, dirty:false
 };
 let LAY = null;                 // last computed layout
+let INLAW = {};                 // pid -> true for people who married in
 let DL  = null;                 // downloads capability, if the host grants one
+const softly = pid => ui.softInlaw && !!INLAW[pid];
 const undoStack = [], redoStack = [];
 
 function blankDoc(){
@@ -960,7 +980,8 @@ function build(pid, depth, ctx){
       if(sp && S.people[sp] && !ctx.placed.has(sp)){
         ctx.placed.add(sp);
         const x = cursor + ctx.gS;
-        members.push({pid:sp, x, depth});
+        /* reached as a partner rather than by descent — they married in */
+        members.push({pid:sp, x, depth, inlaw:true});
         umeta.push({uid, mid:(cursor + x)/2, left:cursor, right:x});
         cursor = x + W(sp);
       } else if(sp && S.people[sp]){
@@ -1031,7 +1052,7 @@ function apply(blk, ox, ctx){
   const y = blk.depth * row;
 
   blk.members.forEach(m => ctx.nodes.push({pid:m.pid, x:ox + m.x, y, depth:blk.depth,
-                                           w:ctx.W(m.pid), h:C.h}));
+                                           w:ctx.W(m.pid), h:C.h, inlaw:!!m.inlaw}));
 
   for(const m of blk.umeta){
     const u = U(m.uid);
@@ -1188,10 +1209,12 @@ function cardSVG(n, model, opts){
   const p = P(n.pid); if(!p) return "";
   const C = model.C, dead = isDead(p);
   const sel = opts.selectable && ui.sel === n.pid;
+  const soft = softly(n.pid);                 // married in — drawn a shade back
   const h = hueOf(p);
-  let g = `<g class="node" data-id="${n.pid}" transform="translate(${r1(n.x)},${r1(n.y)})" style="--h:${h}">`;
+  let g = `<g class="node${soft ? " inlaw" : ""}" data-id="${n.pid}" transform="translate(${r1(n.x)},${r1(n.y)})" style="--h:${h}">`;
   g += `<rect class="card-bg${dead ? " dead" : ""}" x="0" y="0" width="${C.w}" height="${C.h}" rx="7"/>`;
-  g += `<path class="stripe" d="M0 7a7 7 0 0 1 7-7h0v${C.h}h0a7 7 0 0 1-7-7z" opacity="${(0.5 - Math.min(n.depth,5)*0.07).toFixed(2)}"/>`;
+  if(!soft)
+    g += `<path class="stripe" d="M0 7a7 7 0 0 1 7-7h0v${C.h}h0a7 7 0 0 1-7-7z" opacity="${(0.5 - Math.min(n.depth,5)*0.07).toFixed(2)}"/>`;
   if(sel) g += `<rect class="card-sel" x="-2.5" y="-2.5" width="${C.w+5}" height="${C.h+5}" rx="9"/>`;
 
   let tx = 12, tw = C.w - 22;
@@ -1211,8 +1234,10 @@ function cardSVG(n, model, opts){
 
   const name = fullName(p);
   const life = lifeLine(p);
+  const nsz = soft ? 11.5 : 13;
+  const nst = soft ? ` style="font-size:11.5px;font-weight:500"` : "";
   if(C.h >= 74){
-    g += `<text class="nm" x="${tx}" y="${C.photo ? 30 : 25}">${esc(fit(name, tw, 13, CW.nm))}</text>`;
+    g += `<text class="nm" x="${tx}" y="${C.photo ? 30 : 25}"${nst}>${esc(fit(name, tw, nsz, CW.nm))}</text>`;
     let cy = C.photo ? 47 : 43;
     if(p.maiden){
       g += `<text class="nm-sm" x="${tx}" y="${cy}">${esc(fit("née " + p.maiden, tw, 10.5, CW.sm))}</text>`;
@@ -1223,7 +1248,7 @@ function cardSVG(n, model, opts){
     if(meta && cy <= C.h - 6)
       g += `<text class="mt" x="${tx}" y="${cy}">${esc(fit(meta, tw, 10, CW.mt))}</text>`;
   } else {
-    g += `<text class="nm" x="${tx}" y="20">${esc(fit(name, tw, 13, CW.nm))}</text>`;
+    g += `<text class="nm" x="${tx}" y="20"${nst}>${esc(fit(name, tw, nsz, CW.nm))}</text>`;
     if(life) g += `<text class="dt" x="${tx}" y="37">${esc(life)}</text>`;
   }
   g += `</g>`;
@@ -1397,15 +1422,18 @@ function renderCanvas(model, scale, palIn, title){
   for(const n of model.nodes){
     const p = P(n.pid); if(!p) continue;
     const dead = isDead(p), h = hueOf(p);
+    const soft = softly(n.pid);
     x.save(); x.translate(n.x, n.y);
     roundRect(x, 0, 0, C.w, C.h, 7);
-    x.fillStyle = dead ? pal.card2 : pal.card; x.fill();
-    x.strokeStyle = pal.line2; x.lineWidth = 1; x.stroke();
+    x.fillStyle = (dead || soft) ? pal.card2 : pal.card; x.fill();
+    x.strokeStyle = soft ? pal.line : pal.line2; x.lineWidth = 1; x.stroke();
 
-    x.save(); x.beginPath(); roundRect(x, 0, 0, C.w, C.h, 7); x.clip();
-    x.globalAlpha = 0.5 - Math.min(n.depth, 5) * 0.07;
-    x.fillStyle = pal.accent; x.fillRect(0, 0, 7, C.h);
-    x.restore();
+    if(!soft){
+      x.save(); x.beginPath(); roundRect(x, 0, 0, C.w, C.h, 7); x.clip();
+      x.globalAlpha = 0.5 - Math.min(n.depth, 5) * 0.07;
+      x.fillStyle = pal.accent; x.fillRect(0, 0, 7, C.h);
+      x.restore();
+    }
 
     let tx = 12, tw = C.w - 22;
     if(C.photo){
@@ -1430,28 +1458,32 @@ function renderCanvas(model, scale, palIn, title){
     }
 
     const life = lifeLine(p);
+    const nsz = soft ? 11.5 : 13;
+    const nfont = (soft ? "500 11.5px " : "600 13px ") + FAM.ui;
+    const nink = soft ? pal.ink2 : pal.ink;
+    const sub  = soft ? pal.ink3 : pal.ink2;
     if(C.h >= 74){
-      x.fillStyle = pal.ink; x.font = '600 13px "Public Sans", sans-serif';
-      x.fillText(fit(fullName(p), tw, 13, CW.nm), tx, C.photo ? 30 : 25);
+      x.fillStyle = nink; x.font = nfont;
+      x.fillText(fit(fullName(p), tw, nsz, CW.nm), tx, C.photo ? 30 : 25);
       let cy = C.photo ? 47 : 43;
       if(p.maiden){
-        x.fillStyle = pal.ink2; x.font = 'italic 400 10.5px "Public Sans", sans-serif';
+        x.fillStyle = sub; x.font = 'italic 400 10.5px ' + FAM.ui;
         x.fillText(fit("née " + p.maiden, tw, 10.5, CW.sm), tx, cy); cy += 15;
       }
       if(life){
-        x.fillStyle = pal.ink2; x.font = '400 10.5px "IBM Plex Mono", monospace';
+        x.fillStyle = sub; x.font = '400 10.5px ' + FAM.mono;
         x.fillText(life, tx, cy); cy += 15;
       }
       const meta = [p.place, p.occupation].filter(Boolean).join(" · ");
       if(meta && cy <= C.h - 6){
-        x.fillStyle = pal.ink3; x.font = '400 10px "Public Sans", sans-serif';
+        x.fillStyle = pal.ink3; x.font = '400 10px ' + FAM.ui;
         x.fillText(fit(meta, tw, 10, CW.mt), tx, cy);
       }
     } else {
-      x.fillStyle = pal.ink; x.font = '600 13px "Public Sans", sans-serif';
-      x.fillText(fit(fullName(p), tw, 13, CW.nm), tx, 20);
+      x.fillStyle = nink; x.font = nfont;
+      x.fillText(fit(fullName(p), tw, nsz, CW.nm), tx, 20);
       if(life){
-        x.fillStyle = pal.ink2; x.font = '400 10.5px "IBM Plex Mono", monospace';
+        x.fillStyle = sub; x.font = '400 10.5px ' + FAM.mono;
         x.fillText(life, tx, 37);
       }
     }
@@ -1676,20 +1708,21 @@ function treeView(pal){
   const PHOTO  = PILL_H - 16;
   const ROW    = PILL_H + (showPhoto ? 116 : 108);
 
+  const gaps = {gapSpouse:30, gapSib:22, gapGroup:34};
   const nameOf = pid => fullName(P(pid));
+  const sizeOf = pid => softly(pid) ? NSZ - 1.5 : NSZ;
   const pw = {};
   function personW(pid){
     if(pw[pid] != null) return pw[pid];
     const p = P(pid);
-    let w = measure(nameOf(pid), NSZ, "ui", 600);
+    let w = measure(nameOf(pid), sizeOf(pid), "ui", softly(pid) ? 500 : 600);
     if(showYear) w = Math.max(w, measure(lifeLine(p), YSZ, "mono"));
     w += 22;
     if(showPhoto) w += PHOTO + 8;
     return (pw[pid] = Math.max(64, Math.min(300, w)));
   }
 
-  const base = layout({C:{w:150, h:PILL_H, photo:false}, W:personW,
-                       gapSpouse:30, gapSib:22, gapGroup:34});
+  const base = layout(Object.assign({C:{w:150, h:PILL_H, photo:false}, W:personW}, gaps));
   if(!base) return null;
   const idx = buildIndex();
   const pos = {}; base.nodes.forEach(n => { pos[n.pid] = n; });
@@ -1829,9 +1862,11 @@ function treeView(pal){
         tx = nx + 8 + PHOTO + 9; tw = nw - (tx - nx) - 10;
       }
       const yr = showYear ? lifeLine(p) : "";
-      dl.push({t:"text", x:tx, y:c.y + (yr ? -2 : 4.5), s:fitTo(nameOf(pid), tw, NSZ, "ui", 600),
-               size:NSZ, weight:600, fill:pal.ink});
-      if(yr) dl.push({t:"text", x:tx, y:c.y + 14, s:yr, size:YSZ, fam:"mono", fill:pal.ink2});
+      const soft = softly(pid), nsz = sizeOf(pid), wt = soft ? 500 : 600;
+      dl.push({t:"text", x:tx, y:c.y + (yr ? -2 : 4.5), s:fitTo(nameOf(pid), tw, nsz, "ui", wt),
+               size:nsz, weight:wt, fill:soft ? pal.ink2 : pal.ink});
+      if(yr) dl.push({t:"text", x:tx, y:c.y + 14, s:yr, size:YSZ, fam:"mono",
+                      fill:soft ? pal.ink3 : pal.ink2});
       hits.push({pid, x:nx - 3, y:c.y - c.h/2, w:nw + 6, h:c.h, depth:c.depth});
     });
   }
@@ -1966,7 +2001,8 @@ function fanView(pal){
 function timeView(pal){
   const base = layout({C:CARD.compact});
   if(!base) return null;
-  const depth = {}; base.nodes.forEach(n => { depth[n.pid] = n.depth; });
+  const depth = {};
+  base.nodes.forEach(n => { depth[n.pid] = n.depth; });
   const NOW = new Date().getFullYear();
   const rows = [], undated = [];
   for(const id in S.people){
@@ -1975,7 +2011,7 @@ function timeView(pal){
     const b = parseInt(yearOf(p.birth)), d = parseInt(yearOf(p.death));
     if(!b && !d){ undated.push(id); continue; }
     rows.push({pid:id, b: b || (d - 65), d: d || NOW, est: !b,
-               living: !d && !p.dead, depth: depth[id]});
+               living: !d && !p.dead, depth: depth[id], soft: softly(id)});
   }
   if(!rows.length) return null;
   rows.sort((a, b) => (a.depth - b.depth) || (a.b - b.b));
@@ -2017,10 +2053,12 @@ function timeView(pal){
     const p = P(r.pid), x0 = X(r.b), x1 = X(r.d), bh = 15, by = r.y + 4;
     const w = Math.max(4, x1 - x0);
     dl.push({t:"rect", x:x0, y:by, w, h:bh, r:bh/2,
-             fill:mix(pal.card, pal.accent, .10 + Math.min(r.depth, 5) * .055),
-             stroke:r.living ? pal.accent : pal.line2, sw:1, dash:r.est ? "4 3" : null});
-    dl.push({t:"text", x:-14, y:by + 11.5, s:fitTo(fullName(p), LW - 24, 11.5, "ui", 500),
-             size:11.5, weight:500, fill:pal.ink, anchor:"end"});
+             fill:mix(pal.card, pal.accent, r.soft ? .04 : .10 + Math.min(r.depth, 5) * .055),
+             stroke:r.living ? pal.accent : (r.soft ? pal.line : pal.line2), sw:1,
+             dash:r.est ? "4 3" : null});
+    const nsz = r.soft ? 10.5 : 11.5;
+    dl.push({t:"text", x:-14, y:by + 11.5, s:fitTo(fullName(p), LW - 24, nsz, "ui", r.soft ? 400 : 500),
+             size:nsz, weight:r.soft ? 400 : 500, fill:r.soft ? pal.ink2 : pal.ink, anchor:"end"});
     const label = (r.est ? "c." : "") + r.b + (r.living ? "–" : "–" + r.d);
     if(w > measure(label, 9.5, "mono") + 16)
       dl.push({t:"text", x:x0 + 8, y:by + 11, s:label, size:9.5, fam:"mono", fill:pal.ink2});
@@ -2128,9 +2166,21 @@ function registerView(pal){
 }
 
 /* ── view dispatch ─────────────────────────────────────── */
+/**
+ * Who married in, agreed once per render so the chart, the other views,
+ * the people list and the inspector all say the same thing. Membership
+ * follows traversal order, which does not depend on node widths.
+ */
+function readInlaw(model){
+  INLAW = {};
+  if(model) model.nodes.forEach(n => { if(n.inlaw) INLAW[n.pid] = true; });
+  return INLAW;
+}
 function makeModel(pal){
   pal = pal || activePal();
   try {
+    if(ui.view === "chart"){ const m = layout(); readInlaw(m); return m; }
+    readInlaw(layout());
     if(ui.view === "tree")     return treeView(pal);
     if(ui.view === "fan")      return fanView(pal);
     if(ui.view === "time")     return timeView(pal);
@@ -2214,7 +2264,7 @@ function renderRail(){
       const av = p.photo
         ? `<img src="${esc(p.photo)}" alt="">`
         : esc(initials(p));
-      html += `<button class="prow" data-id="${id}" aria-current="${ui.sel === id}">`
+      html += `<button class="prow${softly(id) ? " inlaw" : ""}" data-id="${id}" aria-current="${ui.sel === id}">`
         + `<span class="av" style="background:hsl(${h} 26% 85%);color:hsl(${h} 32% 30%)">${av}</span>`
         + `<span class="txt"><span class="nm">${esc(fullName(p))}</span></span>`
         + `<span class="dt">${esc(lifeLine(p) || "—")}</span></button>`;
@@ -2234,7 +2284,7 @@ function renderInspector(){
   $("#ihAv").style.color = `hsl(${h} 32% 30%)`;
   $("#ihAv").innerHTML = p.photo ? `<img src="${esc(p.photo)}" alt="">` : esc(initials(p));
   $("#ihName").textContent = fullName(p);
-  $("#ihSub").textContent = lifeLine(p) || "dates unknown";
+  inspSub(p);
 
   const info = idx[p.id] || {unions:[], parents:[], childOf:null};
   const pu = info.childOf ? U(info.childOf) : null;
@@ -2339,6 +2389,10 @@ function renderInspector(){
 
   $("#inspBody").innerHTML = html;
 }
+function inspSub(p){
+  $("#ihSub").innerHTML = esc(lifeLine(p) || "dates unknown")
+    + (INLAW[p.id] ? `<br><span class="tag-inlaw">married in</span>` : "");
+}
 function relRow(id, kind, uid){
   const p = P(id); if(!p) return "";
   return `<div class="rel-item">
@@ -2364,7 +2418,7 @@ $("#inspBody").addEventListener("input", e => {
   save();
   scheduleRedraw();
   $("#ihName").textContent = fullName(p);
-  $("#ihSub").textContent = lifeLine(p) || "dates unknown";
+  inspSub(p);
 });
 /** Typing should feel instant, so the chart catches up a beat later. */
 let redrawTimer = null;
@@ -3117,6 +3171,8 @@ async function exportSVG(){
         --card:#fff;--card-2:#F8F8F2;--ink:#141C22;--ink-2:#4B5A62;--ink-3:#79868C;
         --line:#D3D3C6;--line-2:#B4B4A4;--accent:#3D6A54;--accent-ring:#8FB6A2;--brass:#96671F;--brass-tint:#F0E5CF}
     .card-bg{fill:var(--card);stroke:var(--line-2);stroke-width:1}.card-bg.dead{fill:var(--card-2)}
+    .inlaw .card-bg{fill:var(--card-2);stroke:var(--line)}
+    .inlaw .nm{fill:var(--ink-2)}.inlaw .dt,.inlaw .mt,.inlaw .nm-sm{fill:var(--ink-3)}
     .card-sel{display:none}.stripe{fill:var(--accent);opacity:.34}
     .nm{fill:var(--ink);font:600 13px var(--f-ui)}.nm-sm{fill:var(--ink-2);font:italic 400 10.5px var(--f-ui)}
     .dt{fill:var(--ink-2);font:400 10.5px var(--f-mono)}.mt{fill:var(--ink-3);font:400 10px var(--f-ui)}
@@ -4104,7 +4160,7 @@ function save(){
     try {
       localStorage.setItem(KEY, JSON.stringify({data:S, ui:{
         view:ui.view, mode:ui.mode, focus:ui.focus, style:ui.style,
-        gens:ui.gens, isSample:ui.isSample
+        gens:ui.gens, softInlaw:ui.softInlaw, isSample:ui.isSample
       }}));
     } catch(e){
       toast("Browser storage is full — save a family file", true);
@@ -4306,6 +4362,12 @@ $("#tGens").addEventListener("click", e => {
   e.currentTarget.setAttribute("aria-pressed", ui.gens);
   save(); drawChart();
 });
+$("#tInlaw").addEventListener("click", e => {
+  ui.softInlaw = !ui.softInlaw;
+  e.currentTarget.setAttribute("aria-pressed", ui.softInlaw);
+  save(); render();
+  toast(ui.softInlaw ? "People who married in are played down" : "Everyone shown the same");
+});
 $("#tPhoto").addEventListener("click", () => {
   const order = ["compact", "standard", "portrait"];
   ui.style = order[(order.indexOf(ui.style) + 1) % order.length];
@@ -4358,6 +4420,8 @@ function helpDialog(){
           <b style="color:var(--brass)">⚮</b> divorced or separated &nbsp;·&nbsp;
           <b style="color:var(--brass)">◇</b> partners<br>
           <b>∗</b> born &nbsp;·&nbsp; <b>†</b> died — a shaded card means the person has died.<br>
+          People who <b>married in</b> are set smaller and lighter, so the line of descent
+          reads first. The last button by the zoom controls turns that off.<br>
           Roman numerals down the left mark each generation.
           A faint dashed line runs to someone whose own family sits elsewhere on the chart.
         </div>
@@ -4488,6 +4552,7 @@ function loadSample(){
     requestAnimationFrame(() => fitView());
   }
   $("#tGens").setAttribute("aria-pressed", !!ui.gens);
+  $("#tInlaw").setAttribute("aria-pressed", !!ui.softInlaw);
 
   /* redraw once the register faces land, so text measurement is right */
   if(document.fonts && document.fonts.ready){
