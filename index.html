@@ -368,6 +368,17 @@ label.f .hint{font-size:10.5px;color:var(--ink-3);margin-top:3px;font-family:var
 
 .checkline{display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0}
 .checkline input{width:15px;height:15px;accent-color:var(--accent)}
+.sheettable{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+.sheettable table{border-collapse:collapse;width:100%;font-size:12px}
+.sheettable th{
+  text-align:left;font:400 9.5px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-3);padding:8px 11px;border-bottom:1px solid var(--line);white-space:nowrap;
+}
+.sheettable td{padding:7px 11px;border-bottom:1px solid var(--hair);white-space:nowrap}
+.sheettable tr:last-child td{border-bottom:0}
+.sheettable .mono{font-family:var(--f-mono);font-size:11px;color:var(--ink-2)}
+.notice ul{line-height:1.6}
+.notice li{margin-bottom:2px}
 .presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:6px}
 .preset{
   display:flex;flex-direction:column;gap:2px;padding:8px 9px;border-radius:8px;
@@ -2746,6 +2757,7 @@ function printDialog(){
             <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:10px">
               <button class="btn sm" id="pPNG">PNG</button>
               <button class="btn sm" id="pSVG">SVG</button>
+              <button class="btn sm" id="pXLSX">Excel</button>
               <button class="btn sm" id="pCSV">CSV</button>
               <button class="btn sm" id="pJSON">Family file</button>
             </div>
@@ -2807,6 +2819,7 @@ function printDialog(){
   $("#pGo").addEventListener("click", () => { read(); doPrint(); });
   $("#pPNG").addEventListener("click", () => { read(); exportPNG(); });
   $("#pSVG").addEventListener("click", () => { read(); exportSVG(); });
+  $("#pXLSX").addEventListener("click", () => { read(); exportXLSX(); });
   $("#pCSV").addEventListener("click", () => { read(); exportCSV(); });
   $("#pJSON").addEventListener("click", () => { read(); exportJSON(); });
   read();
@@ -3086,25 +3099,9 @@ async function exportPNG(){
   }, "image/png");
 }
 async function exportCSV(){
-  const idx = buildIndex();
-  const head = ["Name","Née","Born","Died","Place","Occupation","Partners","Parents","Children","Notes"];
-  const cell = v => {
-    const s = String(v == null ? "" : v);
-    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-  };
-  const lines = [head.join(",")];
-  for(const id in S.people){
-    const p = P(id), i = idx[id];
-    const partners = i.unions.map(uid => {
-      const u = U(uid), sp = partnerOf(u, id);
-      return (sp && P(sp) ? fullName(P(sp)) : "unknown")
-           + (yearOf(u.date) ? " (" + (u.divorced ? "div. " : "m. ") + yearOf(u.date) + ")" : "");
-    }).join("; ");
-    lines.push([fullName(p), p.maiden, p.birth, p.death, p.place, p.occupation, partners,
-                i.parents.map(q => fullName(P(q))).join("; "),
-                i.kids.map(k => fullName(P(k))).join("; "), p.notes].map(cell).join(","));
-  }
-  const ok = await offer(slug() + ".csv", "﻿" + lines.join("\r\n"), "text/csv");
+  /* the same columns the importer reads, so a sheet can go out to the
+     family, come back edited, and merge straight back in */
+  const ok = await offer(slug() + ".csv", csvBuild(docToRows()), "text/csv");
   if(ok) toast(Object.keys(S.people).length + " people saved as CSV");
 }
 async function exportSVG(){
@@ -3216,6 +3213,19 @@ function fileDialog(){
             <span class="txt"><span class="nm">Load from pasted text</span>
             <span class="meta">for data copied out earlier</span></span></button>
         </div>
+        <fieldset><legend>Spreadsheet</legend>
+          <div class="rel">
+            <button class="rel-item" style="width:100%;text-align:left" id="fSheetIn">
+              <span class="txt"><span class="nm">Import a spreadsheet</span>
+              <span class="meta">.xlsx or .csv — one row per person</span></span></button>
+            <button class="rel-item" style="width:100%;text-align:left" id="fSheetOut">
+              <span class="txt"><span class="nm">Export to Excel</span>
+              <span class="meta">edit it there, import it back — nobody gets duplicated</span></span></button>
+            <button class="rel-item" style="width:100%;text-align:left" id="fSheetTpl">
+              <span class="txt"><span class="nm">Blank spreadsheet to fill in</span>
+              <span class="meta">columns set up, with a sheet explaining how</span></span></button>
+          </div>
+        </fieldset>
         <fieldset><legend>Start over</legend>
           <div style="display:flex;gap:7px;flex-wrap:wrap">
             <button class="btn sm" id="fSample">Load the sample family</button>
@@ -3232,6 +3242,9 @@ function fileDialog(){
   $("#fOpen").addEventListener("click", () => { closeModal(); importJSON("replace"); });
   $("#fMerge").addEventListener("click", () => { closeModal(); importJSON("merge"); });
   $("#fShare").addEventListener("click", () => { closeModal(); shareDialog(); });
+  $("#fSheetIn").addEventListener("click", () => { closeModal(); importSheet(); });
+  $("#fSheetOut").addEventListener("click", () => { closeModal(); exportXLSX(); });
+  $("#fSheetTpl").addEventListener("click", () => { closeModal(); downloadTemplate("xlsx"); });
   $("#fCopy").addEventListener("click", async () => {
     const doc = JSON.stringify({app:"heirloom", version:1, data:S});
     try { await navigator.clipboard.writeText(doc); toast("Copied — paste it somewhere safe"); }
@@ -3275,6 +3288,576 @@ function pasteDialog(){
       toast("Loaded " + Object.keys(S.people).length + " people");
     } catch(e){ toast("That text isn’t family data", true); }
   });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SPREADSHEETS
+   One row per person, with parents and partners named in their
+   own columns — the shape a family actually fills in around a
+   table. The same columns are written on export, so a sheet
+   round-trips: export, edit in Excel, import back.
+
+   .xlsx is read and written here rather than through a library:
+   the format is a zip of XML, and the browser already has
+   deflate (CompressionStream) and an XML parser.
+   ═══════════════════════════════════════════════════════════ */
+const SHEET_COLS = [
+  {k:"id",         h:"ID",          w:9},
+  {k:"first",      h:"First name",  w:16},
+  {k:"last",       h:"Family name", w:16},
+  {k:"maiden",     h:"Née",         w:14},
+  {k:"sex",        h:"Sex",         w:6},
+  {k:"birth",      h:"Born",        w:11},
+  {k:"death",      h:"Died",        w:11},
+  {k:"place",      h:"Place",       w:16},
+  {k:"occupation", h:"Occupation",  w:18},
+  {k:"father",     h:"Father",      w:20},
+  {k:"mother",     h:"Mother",      w:20},
+  {k:"partner",    h:"Partner",     w:20},
+  {k:"married",    h:"Married",     w:10},
+  {k:"divorced",   h:"Divorced",    w:9},
+  {k:"notes",      h:"Notes",       w:34}
+];
+const COL_ALIASES = {
+  fullname:  ["name","full name","person","who"],
+  id:        ["id","ref","key","no","#"],
+  first:     ["first name","first","given name","given","forename","firstname"],
+  last:      ["family name","last name","last","surname","family","lastname"],
+  maiden:    ["née","nee","maiden","maiden name","birth name","born as"],
+  sex:       ["sex","gender","m/f"],
+  birth:     ["born","birth","birth year","year born","dob","date of birth"],
+  death:     ["died","death","death year","year died","dod","date of death"],
+  place:     ["place","birthplace","city","town","village","from","location","lives in","native place"],
+  occupation:["occupation","job","work","profession","role","business"],
+  father:    ["father","dad","papa","parent 1","parent1"],
+  mother:    ["mother","mum","mom","mother's name","parent 2","parent2"],
+  partner:   ["partner","spouse","husband","wife","married to","partner name"],
+  married:   ["married","marriage","marriage year","year married","wedding"],
+  divorced:  ["divorced","separated","divorce"],
+  notes:     ["notes","note","comments","remarks","story","about","details"]
+};
+const norm = s => String(s == null ? "" : s).trim().toLowerCase().replace(/[\s_.]+/g, " ");
+function mapHeaders(row){
+  const map = {};
+  (row || []).forEach((cell, i) => {
+    const t = norm(cell);
+    if(!t) return;
+    for(const k in COL_ALIASES)
+      if(map[k] == null && COL_ALIASES[k].indexOf(t) >= 0){ map[k] = i; return; }
+  });
+  return map;
+}
+
+/* ── zip, just enough of it ─────────────────────────────── */
+function crc32(buf){
+  let t = crc32.t;
+  if(!t){
+    t = crc32.t = new Uint32Array(256);
+    for(let n = 0; n < 256; n++){
+      let c = n;
+      for(let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[n] = c >>> 0;
+    }
+  }
+  let crc = 0xFFFFFFFF;
+  for(let i = 0; i < buf.length; i++) crc = (crc >>> 8) ^ t[(crc ^ buf[i]) & 0xFF];
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+async function deflateRaw(bytes){
+  if(typeof CompressionStream !== "function") return null;
+  try {
+    const cs = new CompressionStream("deflate-raw");
+    return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(cs)).arrayBuffer());
+  } catch(e){ return null; }
+}
+async function inflateRaw(bytes){
+  const ds = new DecompressionStream("deflate-raw");
+  return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer());
+}
+async function zipBlob(entries){
+  const enc = new TextEncoder(), parts = [], central = [];
+  let offset = 0;
+  for(const e of entries){
+    const nameB = enc.encode(e.name);
+    const data = typeof e.data === "string" ? enc.encode(e.data) : e.data;
+    const crc = crc32(data);
+    let comp = await deflateRaw(data), method = 8;
+    if(!comp || comp.length >= data.length){ comp = data; method = 0; }
+    const lh = new Uint8Array(30 + nameB.length), dv = new DataView(lh.buffer);
+    dv.setUint32(0, 0x04034b50, true); dv.setUint16(4, 20, true);
+    dv.setUint16(8, method, true); dv.setUint16(12, 0x2821, true);
+    dv.setUint32(14, crc, true); dv.setUint32(18, comp.length, true);
+    dv.setUint32(22, data.length, true); dv.setUint16(26, nameB.length, true);
+    lh.set(nameB, 30);
+    parts.push(lh, comp);
+    central.push({nameB, crc, csize:comp.length, size:data.length, method, offset});
+    offset += lh.length + comp.length;
+  }
+  const cdStart = offset;
+  for(const c of central){
+    const ch = new Uint8Array(46 + c.nameB.length), dv = new DataView(ch.buffer);
+    dv.setUint32(0, 0x02014b50, true); dv.setUint16(4, 20, true); dv.setUint16(6, 20, true);
+    dv.setUint16(10, c.method, true); dv.setUint16(14, 0x2821, true);
+    dv.setUint32(16, c.crc, true); dv.setUint32(20, c.csize, true); dv.setUint32(24, c.size, true);
+    dv.setUint16(28, c.nameB.length, true); dv.setUint32(42, c.offset, true);
+    ch.set(c.nameB, 46);
+    parts.push(ch);
+    offset += ch.length;
+  }
+  const end = new Uint8Array(22), dv = new DataView(end.buffer);
+  dv.setUint32(0, 0x06054b50, true);
+  dv.setUint16(8, central.length, true); dv.setUint16(10, central.length, true);
+  dv.setUint32(12, offset - cdStart, true); dv.setUint32(16, cdStart, true);
+  parts.push(end);
+  return new Blob(parts, {type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+async function zipRead(buffer){
+  const u = new Uint8Array(buffer), dv = new DataView(buffer);
+  let eo = -1;
+  for(let i = u.length - 22; i >= 0 && i > u.length - 66000; i--)
+    if(dv.getUint32(i, true) === 0x06054b50){ eo = i; break; }
+  if(eo < 0) throw new Error("not a zip");
+  const n = dv.getUint16(eo + 10, true);
+  let p = dv.getUint32(eo + 16, true);
+  const dec = new TextDecoder(), out = {};
+  for(let i = 0; i < n; i++){
+    const method  = dv.getUint16(p + 10, true);
+    const csize   = dv.getUint32(p + 20, true);
+    const nameLen = dv.getUint16(p + 28, true);
+    const exLen   = dv.getUint16(p + 30, true);
+    const cmLen   = dv.getUint16(p + 32, true);
+    const lho     = dv.getUint32(p + 42, true);
+    const name    = dec.decode(u.subarray(p + 46, p + 46 + nameLen));
+    const start   = lho + 30 + dv.getUint16(lho + 26, true) + dv.getUint16(lho + 28, true);
+    const raw     = u.subarray(start, start + csize);
+    out[name] = method === 8 ? await inflateRaw(raw) : raw;
+    p += 46 + nameLen + exLen + cmLen;
+  }
+  return out;
+}
+
+/* ── xlsx ───────────────────────────────────────────────── */
+const xesc = s => String(s == null ? "" : s)
+  .replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))
+  .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
+function colLetter(i){
+  let s = "";
+  for(i += 1; i > 0; i = Math.floor((i - 1) / 26)) s = String.fromCharCode(65 + (i - 1) % 26) + s;
+  return s;
+}
+function sheetXML(rows, widths){
+  let body = "";
+  rows.forEach((row, r) => {
+    let cells = "";
+    (row || []).forEach((v, c) => {
+      if(v == null || v === "") return;
+      cells += `<c r="${colLetter(c)}${r+1}" t="inlineStr"${r === 0 ? ' s="1"' : ""}>`
+             + `<is><t xml:space="preserve">${xesc(v)}</t></is></c>`;
+    });
+    body += `<row r="${r+1}">${cells}</row>`;
+  });
+  const cols = widths ? `<cols>${widths.map((w, i) =>
+    `<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join("")}</cols>` : "";
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
+    + `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`
+    + `<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`
+    + cols + `<sheetData>${body}</sheetData></worksheet>`;
+}
+function xlsxBlob(sheets){
+  const n = sheets.length;
+  const files = [
+    {name:"[Content_Types].xml", data:
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
+      + `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">`
+      + `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>`
+      + `<Default Extension="xml" ContentType="application/xml"/>`
+      + `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>`
+      + `<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>`
+      + sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")
+      + `</Types>`},
+    {name:"_rels/.rels", data:
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
+      + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`
+      + `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>`
+      + `</Relationships>`},
+    {name:"xl/workbook.xml", data:
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
+      + `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"`
+      + ` xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>`
+      + sheets.map((s, i) => `<sheet name="${xesc(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join("")
+      + `</sheets></workbook>`},
+    {name:"xl/_rels/workbook.xml.rels", data:
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
+      + `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`
+      + sheets.map((_, i) => `<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join("")
+      + `<Relationship Id="rId${n+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`
+      + `</Relationships>`},
+    {name:"xl/styles.xml", data:
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
+      + `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`
+      + `<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>`
+      + `<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>`
+      + `<fills count="2"><fill><patternFill patternType="none"/></fill>`
+      + `<fill><patternFill patternType="gray125"/></fill></fills>`
+      + `<borders count="1"><border/></borders>`
+      + `<cellStyleXfs count="1"><xf/></cellStyleXfs>`
+      + `<cellXfs count="2"><xf xfId="0"/><xf fontId="1" applyFont="1" xfId="0"/></cellXfs>`
+      + `</styleSheet>`}
+  ];
+  sheets.forEach((s, i) => files.push(
+    {name:`xl/worksheets/sheet${i+1}.xml`, data:sheetXML(s.rows, s.widths)}));
+  return zipBlob(files);
+}
+/** Excel keeps dates as days since 1899-12-30; turn one back into something readable. */
+function fromSerial(n){
+  const d = new Date(Date.UTC(1899, 11, 30) + n * 86400000);
+  if(isNaN(d)) return String(n);
+  return d.getUTCDate() + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getUTCMonth()]
+       + " " + d.getUTCFullYear();
+}
+async function xlsxRead(buffer){
+  const files = await zipRead(buffer);
+  const dec = new TextDecoder();
+  const shared = [];
+  if(files["xl/sharedStrings.xml"]){
+    const doc = new DOMParser().parseFromString(dec.decode(files["xl/sharedStrings.xml"]), "application/xml");
+    for(const si of doc.getElementsByTagName("si")){
+      let s = "";
+      for(const t of si.getElementsByTagName("t")) s += t.textContent;
+      shared.push(s);
+    }
+  }
+  const name = files["xl/worksheets/sheet1.xml"] ? "xl/worksheets/sheet1.xml"
+    : Object.keys(files).filter(k => /^xl\/worksheets\/.+\.xml$/.test(k)).sort()[0];
+  if(!name) throw new Error("no worksheet");
+  const doc = new DOMParser().parseFromString(dec.decode(files[name]), "application/xml");
+  const rows = [];
+  for(const row of doc.getElementsByTagName("row")){
+    const cells = [];
+    for(const c of row.getElementsByTagName("c")){
+      const ref = c.getAttribute("r") || "";
+      const letters = ref.replace(/[^A-Z]/g, "");
+      let ci = 0;
+      for(let i = 0; i < letters.length; i++) ci = ci * 26 + (letters.charCodeAt(i) - 64);
+      ci = Math.max(0, ci - 1);
+      const t = c.getAttribute("t");
+      let v = "";
+      if(t === "inlineStr"){
+        for(const tt of c.getElementsByTagName("t")) v += tt.textContent;
+      } else {
+        const vs = c.getElementsByTagName("v");
+        const raw = vs.length ? vs[0].textContent : "";
+        v = t === "s" ? (shared[+raw] || "") : raw;
+      }
+      cells[ci] = v;
+    }
+    rows.push(cells);
+  }
+  return rows;
+}
+
+/* ── csv ────────────────────────────────────────────────── */
+function csvParse(text){
+  text = text.replace(/^﻿/, "");
+  const first = text.slice(0, text.indexOf("\n") + 1 || text.length);
+  const sep = (first.split("\t").length > first.split(",").length) ? "\t" : ",";
+  const rows = [];
+  let row = [], cur = "", q = false;
+  for(let i = 0; i < text.length; i++){
+    const c = text[i];
+    if(q){
+      if(c === '"'){ if(text[i+1] === '"'){ cur += '"'; i++; } else q = false; }
+      else cur += c;
+    }
+    else if(c === '"') q = true;
+    else if(c === sep){ row.push(cur); cur = ""; }
+    else if(c === "\n"){ row.push(cur); rows.push(row); row = []; cur = ""; }
+    else if(c !== "\r") cur += c;
+  }
+  if(cur !== "" || row.length){ row.push(cur); rows.push(row); }
+  return rows;
+}
+function csvBuild(rows){
+  const cell = v => {
+    const s = String(v == null ? "" : v);
+    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  return "﻿" + rows.map(r => (r || []).map(cell).join(",")).join("\r\n");
+}
+
+/* ── the family as rows, and back again ─────────────────── */
+function docToRows(){
+  const idx = buildIndex();
+  const rows = [SHEET_COLS.map(c => c.h)];
+  for(const id in S.people){
+    const p = P(id), i = idx[id];
+    const partners = [], married = [], divorced = [];
+    for(const uid of i.unions){
+      const u = U(uid), sp = partnerOf(u, id);
+      if(!sp || !P(sp)) continue;
+      partners.push(fullName(P(sp)));
+      married.push(u.date || "");
+      divorced.push(u.divorced ? "yes" : "");
+    }
+    const par = {};
+    i.parents.forEach(q => {
+      const s = P(q).sex;
+      if(s === "M" && !par.f) par.f = fullName(P(q));
+      else if(s === "F" && !par.m) par.m = fullName(P(q));
+      else if(!par.f) par.f = fullName(P(q));
+      else par.m = fullName(P(q));
+    });
+    const v = {
+      id, first:p.first, last:p.last, maiden:p.maiden, sex:p.sex,
+      birth:p.birth, death:p.death, place:p.place, occupation:p.occupation,
+      father:par.f || "", mother:par.m || "",
+      partner:partners.join("; "), married:married.join("; "),
+      divorced:divorced.some(Boolean) ? divorced.join("; ") : "",
+      notes:p.notes
+    };
+    rows.push(SHEET_COLS.map(c => v[c.k] == null ? "" : v[c.k]));
+  }
+  return rows;
+}
+
+const TRUEISH = /^(y|yes|true|1|divorced|separated|d)$/i;
+function rowsToDoc(rows){
+  const warn = [];
+  let hi = -1, map = null;
+  for(let i = 0; i < Math.min(rows.length, 15); i++){
+    const m = mapHeaders(rows[i]);
+    const named = m.first != null || m.last != null || m.fullname != null;
+    if(named && Object.keys(m).length >= 2){ hi = i; map = m; break; }
+  }
+  if(hi < 0) return {error:"No header row found. The top row should name the columns — First name, Born, Father, and so on."};
+
+  const people = {}, unions = {}, recs = [];
+  let seq = 1, useq = 1;
+  const get = (r, k) => {
+    const c = map[k];
+    return c == null ? "" : String(r[c] == null ? "" : r[c]).trim();
+  };
+  /* a bare number in a date column is a year; a big one is an Excel date */
+  const dateish = v => {
+    if(/^\d+(\.\d+)?$/.test(v)){
+      const n = +v;
+      if(n > 20000 && n < 80000) return fromSerial(n);
+      if(n >= 1000 && n <= 2200) return String(Math.round(n));
+    }
+    return v;
+  };
+  for(let i = hi + 1; i < rows.length; i++){
+    const r = rows[i] || [];
+    let first = get(r, "first"), last = get(r, "last");
+    if(!first && !last && map.fullname != null){
+      const parts = get(r, "fullname").split(/\s+/).filter(Boolean);
+      if(parts.length){ last = parts.length > 1 ? parts.pop() : ""; first = parts.join(" "); }
+    }
+    if(!first && !last) continue;                       // blank or spacer row
+    const id = get(r, "id") || ("s" + (seq++));
+    if(people[id]){ warn.push(`Two rows share the ID “${id}” — the second was skipped.`); continue; }
+    const sexRaw = get(r, "sex").toUpperCase()[0] || "";
+    people[id] = {
+      id, first, last, maiden:get(r, "maiden"),
+      sex:"MF".indexOf(sexRaw) >= 0 ? sexRaw : (sexRaw ? "X" : ""),
+      birth:dateish(get(r, "birth")), death:dateish(get(r, "death")),
+      dead:false, place:get(r, "place"), occupation:get(r, "occupation"),
+      notes:get(r, "notes"), photo:""
+    };
+    recs.push({id, row:i + 1,
+      father:get(r, "father"), mother:get(r, "mother"),
+      partners:get(r, "partner").split(/\s*[;|]\s*/).filter(Boolean),
+      married :get(r, "married").split(/\s*[;|]\s*/),
+      divorced:get(r, "divorced").split(/\s*[;|]\s*/)});
+  }
+  if(!recs.length) return {error:"The header row was found, but no rows had a name in them."};
+
+  const byId = {}, byName = {};
+  const index = pid => {
+    const p = people[pid];
+    byId[pid.toLowerCase()] = pid;
+    const full = (p.first + " " + p.last).trim().toLowerCase();
+    if(full) (byName[full] = byName[full] || []).push(pid);
+    const f = (p.first || "").trim().toLowerCase();
+    if(f && f !== full) (byName[f] = byName[f] || []).push(pid);
+  };
+  Object.keys(people).forEach(index);
+
+  let invented = 0;
+  function resolve(ref, role, row){
+    const t = String(ref || "").trim();
+    if(!t) return null;
+    const key = t.toLowerCase();
+    if(byId[key]) return byId[key];
+    const hit = byName[key];
+    if(hit && hit.length === 1) return hit[0];
+    if(hit && hit.length > 1){
+      warn.push(`Row ${row}: “${t}” matches ${hit.length} people, so the ${role} link was left off.`);
+      return null;
+    }
+    /* named as someone's parent or partner but with no row of their own —
+       give them a card so the link is not lost */
+    const parts = t.split(/\s+/);
+    const last = parts.length > 1 ? parts.pop() : "";
+    const id = "s" + (seq++);
+    people[id] = {id, first:parts.join(" "), last, maiden:"", sex:"", birth:"", death:"",
+                  dead:false, place:"", occupation:"", notes:"", photo:""};
+    index(id);
+    invented++;
+    return id;
+  }
+  function unionOf(a, b){
+    for(const uid in unions){
+      const u = unions[uid];
+      if(a && b && ((u.a === a && u.b === b) || (u.a === b && u.b === a))) return uid;
+      if(a && !b && u.a === a && !u.b) return uid;
+      if(!a && b && u.b === b && !u.a) return uid;
+    }
+    const uid = "sv" + (useq++);
+    unions[uid] = {id:uid, a:a || null, b:b || null, status:"married",
+                   date:"", place:"", divorced:false, children:[]};
+    return uid;
+  }
+
+  for(const rc of recs)                                  // partners first, so the
+    rc.partners.forEach((name, j) => {                   // union carries its year
+      const pid = resolve(name, "partner", rc.row);
+      if(!pid || pid === rc.id) return;
+      const u = unions[unionOf(rc.id, pid)];
+      if(!u.date && rc.married[j]) u.date = dateish(String(rc.married[j]).trim());
+      if(TRUEISH.test(String(rc.divorced[j] || "").trim())) u.divorced = true;
+    });
+  for(const rc of recs){
+    const f = resolve(rc.father, "father", rc.row);
+    const m = resolve(rc.mother, "mother", rc.row);
+    if(!f && !m) continue;
+    const u = unions[unionOf(f, m)];
+    if(!u.children.includes(rc.id)) u.children.push(rc.id);
+  }
+  if(invented)
+    warn.push(`${invented} ${invented === 1 ? "person was" : "people were"} named as a parent or partner without a row of their own — cards were made for them.`);
+
+  const unknown = (rows[hi] || []).filter((c, i) =>
+    norm(c) && !Object.keys(map).some(k => map[k] === i));
+  if(unknown.length)
+    warn.push(`Ignored ${unknown.length} column${unknown.length > 1 ? "s" : ""}: ${unknown.slice(0, 6).join(", ")}.`);
+
+  return {doc:{people, unions, meta:Object.assign({}, S.meta), seq:seq + useq + 1},
+          count:Object.keys(people).length, unions:Object.keys(unions).length, warn};
+}
+
+function templateSheets(){
+  const head = SHEET_COLS.map(c => c.h);
+  const ex = [
+    ["", "Hari Prasad", "Deshmukh", "", "M", "1918", "1994", "Nagpur", "Railway clerk",
+     "", "", "Kamala Deshmukh", "1941", "", "Example — delete these three rows"],
+    ["", "Kamala", "Deshmukh", "Joshi", "F", "1923", "2005", "Nagpur", "Schoolteacher",
+     "", "", "", "", "", ""],
+    ["", "Vasant", "Deshmukh", "", "M", "1943", "2019", "Nagpur", "Civil engineer",
+     "Hari Prasad Deshmukh", "Kamala Deshmukh", "Sulochana Kale", "1968", "", ""]
+  ];
+  const notes = [
+    ["How to fill this in"],
+    [""],
+    ["One row per person. Only a name is required — leave anything else blank."],
+    [""],
+    ["Father / Mother", "Type the person's full name exactly as it appears in their own row."],
+    ["", "If they have no row of their own, that is fine — a card is made for them."],
+    ["Partner", "Full name. For more than one partner, separate with a semicolon:"],
+    ["", "Sulochana Kale; Anita Rao"],
+    ["Married", "The year, matched to the partners in the same order: 1968; 1990"],
+    ["Divorced", "yes (or leave blank). Same order as the partners."],
+    ["Born / Died", "Anything readable — 1948, Mar 1948, c. 1910. Formatting the"],
+    ["", "column as Text stops Excel turning years into dates."],
+    ["Sex", "M, F, or leave blank."],
+    ["ID", "Leave blank. It is filled in when you export, so a sheet can go"],
+    ["", "out to the family, come back edited, and merge without duplicates."],
+    [""],
+    ["Heirloom · Stunity tech — by Prateek"]
+  ];
+  return [{name:"Family", rows:[head].concat(ex), widths:SHEET_COLS.map(c => c.w)},
+          {name:"How to fill this in", rows:notes, widths:[22, 62]}];
+}
+
+async function exportXLSX(){
+  try {
+    const blob = await xlsxBlob([{name:"Family", rows:docToRows(), widths:SHEET_COLS.map(c => c.w)}]);
+    if(await offer(slug() + ".xlsx", blob)) toast(Object.keys(S.people).length + " people saved as a spreadsheet");
+  } catch(e){ toast("Could not build the spreadsheet", true); }
+}
+async function downloadTemplate(kind){
+  if(kind === "csv"){
+    const rows = templateSheets()[0].rows;
+    if(await offer("heirloom-family-template.csv", csvBuild(rows), "text/csv"))
+      toast("Blank spreadsheet saved");
+    return;
+  }
+  try {
+    const blob = await xlsxBlob(templateSheets());
+    if(await offer("heirloom-family-template.xlsx", blob)) toast("Blank spreadsheet saved");
+  } catch(e){ toast("Could not build the template — try the CSV instead", true); }
+}
+
+function importSheet(){
+  const inp = document.createElement("input");
+  inp.type = "file";
+  inp.accept = ".xlsx,.csv,.tsv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv";
+  inp.addEventListener("change", async () => {
+    const f = inp.files && inp.files[0];
+    if(!f) return;
+    try {
+      let rows;
+      if(/\.xlsx$/i.test(f.name)) rows = await xlsxRead(await f.arrayBuffer());
+      else rows = csvParse(await f.text());
+      const res = rowsToDoc(rows);
+      if(res.error) return toast(res.error, true);
+      sheetPreview(res, f.name);
+    } catch(err){
+      console.error(err);
+      toast(/\.xlsx$/i.test(f.name)
+        ? "That .xlsx could not be read — try saving it as CSV instead"
+        : "That file could not be read", true);
+    }
+  });
+  inp.click();
+}
+
+function sheetPreview(res, filename){
+  const ids = Object.keys(res.doc.people).slice(0, 6);
+  const mine = Object.keys(S.people).length;
+  openModal(`
+    <div class="modal wide">
+      <div class="modal-head"><div style="flex:1">
+        <h2>${esc(filename)}</h2>
+        <p><b>${res.count}</b> people and <b>${res.unions}</b> family links read from the sheet.</p>
+      </div>
+      <button class="btn icon ghost" data-close aria-label="Close">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <div class="sheettable"><table>
+          <thead><tr><th>Name</th><th>Born</th><th>Died</th><th>Place</th><th>Occupation</th></tr></thead>
+          <tbody>${ids.map(id => {
+            const p = res.doc.people[id];
+            return `<tr><td><b>${esc(fullName(p))}</b></td><td class="mono">${esc(p.birth)}</td>
+              <td class="mono">${esc(p.death)}</td><td>${esc(p.place)}</td><td>${esc(p.occupation)}</td></tr>`;
+          }).join("")}</tbody>
+        </table></div>
+        ${res.count > ids.length ? `<div class="mono" style="font-size:10.5px;color:var(--ink-3);margin-top:7px">
+          …and ${res.count - ids.length} more</div>` : ""}
+        ${res.warn.length ? `<div class="notice"><b>Worth checking</b><ul style="margin:6px 0 0;padding-left:18px">
+          ${res.warn.slice(0, 8).map(w => `<li>${esc(w)}</li>`).join("")}
+          ${res.warn.length > 8 ? `<li>…and ${res.warn.length - 8} more</li>` : ""}</ul></div>` : ""}
+      </div>
+      <div class="modal-foot">
+        <span class="spring"></span>
+        <button class="btn" data-close>Cancel</button>
+        ${mine ? `<button class="btn" id="imMerge">Merge into mine</button>` : ""}
+        <button class="btn primary" id="imOpen">${mine ? "Replace mine" : "Open it"}</button>
+      </div>
+    </div>`);
+  $("#imOpen").addEventListener("click", () => { closeModal(); importDoc(res.doc, "replace"); });
+  if(mine) $("#imMerge").addEventListener("click", () => { closeModal(); importDoc(res.doc, "merge"); });
 }
 
 /* ═══════════════════════════════════════════════════════════

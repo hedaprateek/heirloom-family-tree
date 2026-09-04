@@ -77,8 +77,42 @@ to greys for cheap printing), on white, warm cream, or transparent for export.
 
 **Files** — vector **PDF** via Print ▸ *Save as PDF* (set margins to **None**
 and turn **headers and footers off**); **PNG** at 150/300/600 dpi sized to the
-paper you chose; **SVG**; **CSV** of everyone for a spreadsheet; and the raw
+paper you chose; **SVG**; **Excel** or **CSV** (see below); and the raw
 **family file** as JSON.
+
+## Spreadsheets
+
+**File ▸ Blank spreadsheet to fill in** gives you an `.xlsx` with the columns
+set up and a second sheet explaining how. Mail it round, let people type into
+it, then **File ▸ Import a spreadsheet**.
+
+One row per person. Only a name is required:
+
+| ID | First name | Family name | Née | Sex | Born | Died | Place | Occupation | Father | Mother | Partner | Married | Divorced | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+
+- **Father / Mother / Partner** take a person's full name as it appears in
+  their own row. Someone named but with no row of their own still gets a card,
+  so no link is lost.
+- More than one partner: separate with semicolons — `Sulochana Kale; Anita Rao`
+  — and line the **Married** and **Divorced** columns up in the same order.
+- **Born / Died** accept anything readable: `1948`, `Mar 1948`, `c. 1910`. If
+  Excel has turned a year into a date, it is converted back.
+- Column headings are matched loosely, so a sheet someone already made usually
+  imports as-is: *Name*, *DOB*, *Gender*, *Spouse*, *Mother's name* and the
+  like are all understood. A single **Name** column is split into first and
+  family name.
+
+Before anything is applied you see what was read, plus anything worth checking
+(ambiguous names, ignored columns), and choose **merge** or **replace**.
+
+**File ▸ Export to Excel** writes the same columns back out with IDs filled in,
+so a sheet can go out to the family, come back edited, and merge without
+duplicating anyone.
+
+Reading and writing `.xlsx` is done in the page itself — the format is a zip of
+XML, and the browser already has deflate and an XML parser — so there is no
+library to load and it works offline.
 
 ## Sharing it with the family
 
