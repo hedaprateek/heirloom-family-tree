@@ -112,6 +112,9 @@ button{cursor:pointer;background:none;border:0;padding:0}
 .seg button svg{flex:0 0 auto;opacity:.85}
 .seg button[aria-pressed="true"] svg{opacity:1}
 @media (max-width:1320px){.seg .lab{display:none}.seg button{padding:6px 9px}}
+/* the action labels go before the view names do */
+@media (max-width:1560px){.bar .t{display:none}.bar .btn{padding:7px 9px}}
+#btnFocus span{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .selwrap{position:relative;display:inline-flex;flex:0 0 auto}
 .selwrap svg{position:absolute;right:8px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--ink-3)}
 .selwrap select{
@@ -365,6 +368,19 @@ label.f .hint{font-size:10.5px;color:var(--ink-3);margin-top:3px;font-family:var
 
 .checkline{display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0}
 .checkline input{width:15px;height:15px;accent-color:var(--accent)}
+.presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:6px}
+.preset{
+  display:flex;flex-direction:column;gap:2px;padding:8px 9px;border-radius:8px;
+  border:1px solid var(--line);background:var(--card);text-align:left;line-height:1.3;
+}
+.preset:hover{border-color:var(--accent-ring);background:var(--accent-tint)}
+.preset b{font-size:12.5px;font-weight:600}
+.preset span{font-size:10px;color:var(--ink-3);font-family:var(--f-mono)}
+/* one-ink printing: the register palette collapsed to greys */
+.ink-mono{--accent:#6E6E6E;--accent-ring:#9A9A9A;--accent-tint:#EDEDED;
+  --brass:#5A5A5A;--brass-tint:#E9E9E9;--line:#CFCFCF;--line-2:#ABABAB;--ink-3:#767676}
+.ink-mono .mono-bg{fill:#E8E8E8}
+.ink-mono .mono-tx{fill:#4A4A4A}
 .notice{
   background:var(--brass-tint);border:1px solid color-mix(in srgb,var(--brass) 30%,transparent);
   color:var(--brass);border-radius:8px;padding:9px 11px;font-size:12px;line-height:1.55;margin-top:12px;
@@ -575,11 +591,15 @@ kbd{
 
     <button class="btn" id="btnAdd">
       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
-      <span class="hide-narrow">Add person</span>
+      <span class="hide-narrow t">Add person</span>
+    </button>
+    <button class="btn" id="btnShare" title="Send this family to someone">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12.2" cy="3.6" r="2.1"/><circle cx="3.8" cy="8" r="2.1"/><circle cx="12.2" cy="12.4" r="2.1"/><path d="M5.7 7 10.3 4.6M5.7 9l4.6 2.4" stroke-linecap="round"/></svg>
+      <span class="hide-narrow t">Share</span>
     </button>
     <button class="btn" id="btnFile" title="Save, open, sample data">
       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2.5 4.2A1.2 1.2 0 0 1 3.7 3h2.4l1.3 1.6h4.9A1.2 1.2 0 0 1 13.5 5.8v6A1.2 1.2 0 0 1 12.3 13H3.7a1.2 1.2 0 0 1-1.2-1.2z"/></svg>
-      <span class="hide-narrow">File</span>
+      <span class="hide-narrow t">File</span>
     </button>
     <button class="btn primary" id="btnPrint">
       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M4.5 6V2.5h7V6M4.5 11.5H3.2A1.2 1.2 0 0 1 2 10.3V7.2A1.2 1.2 0 0 1 3.2 6h9.6A1.2 1.2 0 0 1 14 7.2v3.1a1.2 1.2 0 0 1-1.2 1.2h-1.3M4.5 9.5h7v4h-7z"/></svg>
@@ -671,6 +691,9 @@ kbd{
 <div id="toasts" aria-live="polite"></div>
 <div id="printRoot"></div>
 
+<!-- QR codes for the share link and the printed poster. Optional: the app
+     works without it, offline or if the CDN is blocked. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script>
 "use strict";
 /* ═══════════════════════════════════════════════════════════
@@ -860,10 +883,19 @@ function parentUnion(id, create){
    Each block reports its width and the x of its head person,
    which is what the parent's descent line drops onto.
    ═══════════════════════════════════════════════════════════ */
-function layout(cardOverride){
+/**
+ * o.C  node metrics · o.W(pid) per-person width (defaults to C.w)
+ * o.gapSpouse / o.gapSib / o.gapGroup override the chart's spacing
+ */
+function layout(o){
+  o = o || {};
   const idx = buildIndex();
-  const C   = cardOverride || CARD[ui.style];
-  const ctx = {idx, C, placed:new Set(), usedU:new Set(), nodes:[], links:[], bands:[], cross:[]};
+  const C   = o.C || CARD[ui.style];
+  const ctx = {idx, C, W:o.W || (() => C.w),
+               gS:o.gapSpouse == null ? GAP_SPOUSE : o.gapSpouse,
+               gI:o.gapSib    == null ? GAP_SIB    : o.gapSib,
+               gG:o.gapGroup  == null ? GAP_GROUP  : o.gapGroup,
+               placed:new Set(), usedU:new Set(), nodes:[], links:[], bands:[], cross:[]};
   const ids = Object.keys(S.people);
   if(!ids.length) return null;
 
@@ -903,10 +935,10 @@ function layout(cardOverride){
 /** Build one subtree, in coordinates local to the block. */
 function build(pid, depth, ctx){
   ctx.placed.add(pid);
-  const C = ctx.C;
+  const C = ctx.C, W = ctx.W;
   const members = [{pid, x:0, depth}];
   const umeta   = [];
-  let cursor = C.w;
+  let cursor = W(pid);
 
   if(depth < MAX_DEPTH){
     const unions = ctx.idx[pid].unions.filter(uid => !ctx.usedU.has(uid));
@@ -916,16 +948,16 @@ function build(pid, depth, ctx){
       const sp = partnerOf(u, pid);
       if(sp && S.people[sp] && !ctx.placed.has(sp)){
         ctx.placed.add(sp);
-        const x = cursor + GAP_SPOUSE;
+        const x = cursor + ctx.gS;
         members.push({pid:sp, x, depth});
         umeta.push({uid, mid:(cursor + x)/2, left:cursor, right:x});
-        cursor = x + C.w;
+        cursor = x + W(sp);
       } else if(sp && S.people[sp]){
         // already drawn elsewhere on the chart — link across instead of duplicating
-        umeta.push({uid, mid:C.w/2, solo:true});
+        umeta.push({uid, mid:W(pid)/2, solo:true});
         ctx.cross.push({kind:"spouse", a:pid, b:sp, uid});
       } else {
-        umeta.push({uid, mid:C.w/2, solo:true});   // partner unknown
+        umeta.push({uid, mid:W(pid)/2, solo:true});   // partner unknown
       }
     }
   }
@@ -947,9 +979,9 @@ function build(pid, depth, ctx){
       const b = build(k, depth + 1, ctx);
       b.offset = gw;
       blocks.push(b);
-      gw += b.width + GAP_SIB;
+      gw += b.width + ctx.gI;
     }
-    gw -= GAP_SIB;
+    gw -= ctx.gI;
     const first = blocks[0], last = blocks[blocks.length - 1];
     groups.push({
       uid:m.uid, mid:m.mid, blocks, width:gw,
@@ -963,7 +995,7 @@ function build(pid, depth, ctx){
     let left = g.mid - g.anchorCenter;
     if(left < run) left = run;
     g.left = left;
-    run = left + g.width + GAP_GROUP;
+    run = left + g.width + ctx.gG;
   }
 
   let minX = 0, maxX = headW;
@@ -977,7 +1009,7 @@ function build(pid, depth, ctx){
   return {
     pid, depth, members, umeta, groups,
     width: maxX - minX,
-    anchor: members[0].x + C.w / 2,
+    anchor: members[0].x + W(pid) / 2,
     offset: 0
   };
 }
@@ -987,7 +1019,8 @@ function apply(blk, ox, ctx){
   const C = ctx.C, row = C.h + GEN_V;
   const y = blk.depth * row;
 
-  blk.members.forEach(m => ctx.nodes.push({pid:m.pid, x:ox + m.x, y, depth:blk.depth}));
+  blk.members.forEach(m => ctx.nodes.push({pid:m.pid, x:ox + m.x, y, depth:blk.depth,
+                                           w:ctx.W(m.pid), h:C.h}));
 
   for(const m of blk.umeta){
     const u = U(m.uid);
@@ -1075,8 +1108,9 @@ function finish(extra, ctx, ancestors){
   if(!ctx.nodes.length) return null;
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for(const n of ctx.nodes){
-    minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x + C.w);
-    minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y + C.h);
+    if(n.w == null){ n.w = C.w; n.h = C.h; }
+    minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x + n.w);
+    minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y + n.h);
   }
   const pos = {};
   ctx.nodes.forEach(n => { pos[n.pid] = n; });
@@ -1087,16 +1121,16 @@ function finish(extra, ctx, ancestors){
     if(c.kind === "spouse"){
       const A = pos[c.a], B = pos[c.b];
       if(!A || !B) continue;
-      const ax = A.x + C.w/2, ay = A.y + C.h/2, bx = B.x + C.w/2, by = B.y + C.h/2;
+      const ax = A.x + A.w/2, ay = A.y + A.h/2, bx = B.x + B.w/2, by = B.y + B.h/2;
       crossPaths.push({d:`M${r1(ax)} ${r1(ay)} C${r1((ax+bx)/2)} ${r1(ay)} ${r1((ax+bx)/2)} ${r1(by)} ${r1(bx)} ${r1(by)}`});
     } else {
       const K = pos[c.child]; if(!K) continue;
       const u = U(c.uid);
       const A = u.a ? pos[u.a] : null, B = u.b ? pos[u.b] : null;
-      const src = A && B ? {x:(A.x + B.x)/2 + C.w/2, y:Math.max(A.y,B.y) + C.h}
-                : (A || B) ? {x:(A||B).x + C.w/2, y:(A||B).y + C.h} : null;
+      const src = A && B ? {x:(A.x + A.w/2 + B.x + B.w/2)/2, y:Math.max(A.y,B.y) + C.h}
+                : (A || B) ? {x:(A||B).x + (A||B).w/2, y:(A||B).y + C.h} : null;
       if(!src) continue;
-      const kx = K.x + C.w/2, ky = K.y;
+      const kx = K.x + K.w/2, ky = K.y;
       crossPaths.push({d:`M${r1(src.x)} ${r1(src.y)} C${r1(src.x)} ${r1((src.y+ky)/2)} ${r1(kx)} ${r1((src.y+ky)/2)} ${r1(kx)} ${r1(ky)}`});
     }
   }
@@ -1114,7 +1148,6 @@ function finish(extra, ctx, ancestors){
   });
 
   const x0 = minX - PAD - GUTTER, y0 = minY - PAD;
-  ctx.nodes.forEach(n => { n.w = C.w; n.h = C.h; });
   return {
     kind:"chart",
     nodes:ctx.nodes, links:ctx.links, bands:ctx.bands, cross:crossPaths, rows,
@@ -1284,8 +1317,8 @@ function centerOn(pid){
    loaded webfonts are available (an SVG rasterised via <img>
    would silently lose them).
    ═══════════════════════════════════════════════════════════ */
-function renderCanvas(model, scale, palName, title){
-  const pal = PAL[palName] || PAL.light;
+function renderCanvas(model, scale, palIn, title){
+  const pal = asPal(palIn);
   const C = model.C;
   const titleH = title && (title.main || title.sub) ? 72 : 0;
   const b = model.box;
@@ -1294,7 +1327,8 @@ function renderCanvas(model, scale, palName, title){
   const cv = document.createElement("canvas");
   cv.width = W; cv.height = H;
   const x = cv.getContext("2d");
-  x.fillStyle = pal.paper; x.fillRect(0, 0, W, H);
+  const ground = paperFill();
+  if(ground){ x.fillStyle = ground; x.fillRect(0, 0, W, H); }
   x.scale(scale, scale);
   x.translate(-b.x, -b.y);
 
@@ -1494,6 +1528,12 @@ function dlToSVG(dl){
       s += `<circle cx="${r1(o.cx)}" cy="${r1(o.cy)}" r="${r1(o.r)}"${fill}${st}${op}/>`;
     else if(o.t === "path")
       s += `<path d="${o.d}"${fill}${st}${dash}${cap}${join}${rot}${op}/>`;
+    else if(o.t === "image"){
+      const id = "clp" + (dlToSVG.n = (dlToSVG.n || 0) + 1);
+      if(o.clip) s += `<clipPath id="${id}"><circle cx="${r1(o.clip.cx)}" cy="${r1(o.clip.cy)}" r="${r1(o.clip.r)}"/></clipPath>`;
+      s += `<image href="${esc(o.href)}" x="${r1(o.x)}" y="${r1(o.y)}" width="${r1(o.w)}" height="${r1(o.h)}"`
+         + ` preserveAspectRatio="xMidYMid slice"${o.clip ? ` clip-path="url(#${id})"` : ""}${op}/>`;
+    }
     else if(o.t === "text"){
       const an = o.anchor && o.anchor !== "start" ? ` text-anchor="${o.anchor}"` : "";
       const ls = o.ls ? ` letter-spacing="${o.ls}"` : "";
@@ -1503,6 +1543,13 @@ function dlToSVG(dl){
     }
   }
   return s;
+}
+/** photos reach the canvas painter through the same warm cache the chart uses */
+function imageFor(o){
+  if(o.pid && photoCache[o.pid]) return photoCache[o.pid];
+  if(!imageFor.c) imageFor.c = {};
+  if(!imageFor.c[o.href]){ const i = new Image(); i.src = o.href; imageFor.c[o.href] = i; }
+  return imageFor.c[o.href];
 }
 function dlPaint(x, dl){
   for(const o of dl){
@@ -1527,6 +1574,14 @@ function dlPaint(x, dl){
       const p = new Path2D(o.d);
       if(o.fill){ x.fillStyle = o.fill; x.fill(p); }
       if(o.stroke){ x.strokeStyle = o.stroke; x.lineWidth = o.sw || 1; x.stroke(p); }
+    } else if(o.t === "image"){
+      const img = imageFor(o);
+      if(img && img.complete && img.naturalWidth){
+        if(o.clip){ x.beginPath(); x.arc(o.clip.cx, o.clip.cy, o.clip.r, 0, Math.PI * 2); x.clip(); }
+        const k = Math.max(o.w / img.naturalWidth, o.h / img.naturalHeight);
+        const dw = img.naturalWidth * k, dh = img.naturalHeight * k;
+        x.drawImage(img, o.x + o.w/2 - dw/2, o.y + o.h/2 - dh/2, dw, dh);
+      }
     } else if(o.t === "text"){
       x.fillStyle = o.fill;
       x.font = fontStr(o.size, o.fam, o.weight, o.italic);
@@ -1537,15 +1592,17 @@ function dlPaint(x, dl){
     x.restore();
   }
 }
-function renderCanvasDL(model, scale, palName, title){
-  const pal = PAL[palName] || PAL.light;
+function asPal(p){ return typeof p === "string" ? (PAL[p] || PAL.light) : (p || PAL.light); }
+function renderCanvasDL(model, scale, palIn, title){
+  const pal = asPal(palIn);
   const titleH = title && (title.main || title.sub) ? 72 : 0;
   const b = model.box;
   const cv = document.createElement("canvas");
   cv.width  = Math.max(1, Math.round(b.w * scale));
   cv.height = Math.max(1, Math.round((b.h + titleH) * scale));
   const x = cv.getContext("2d");
-  x.fillStyle = pal.paper; x.fillRect(0, 0, cv.width, cv.height);
+  const ground = paperFill();
+  if(ground){ x.fillStyle = ground; x.fillRect(0, 0, cv.width, cv.height); }
   x.scale(scale, scale);
   x.translate(-b.x, -b.y);
   if(titleH){
@@ -1561,10 +1618,13 @@ function renderCanvasDL(model, scale, palName, title){
 }
 
 /* small shapes the views share */
-function taper(x1, y1, x2, y2, w1, w2){
-  const m1 = y1 + (y2 - y1) * 0.42, m2 = y1 + (y2 - y1) * 0.74;
-  return `M${r1(x1 - w1/2)} ${r1(y1)} C${r1(x1 - w1/2)} ${r1(m1)} ${r1(x2 - w2/2)} ${r1(m2)} ${r1(x2 - w2/2)} ${r1(y2)} `
-       + `L${r1(x2 + w2/2)} ${r1(y2)} C${r1(x2 + w2/2)} ${r1(m2)} ${r1(x1 + w1/2)} ${r1(m1)} ${r1(x1 + w1/2)} ${r1(y1)} Z`;
+/** a filled ribbon that narrows from w1 to w2; k/bend give each branch its own sweep */
+function taper(x1, y1, x2, y2, w1, w2, k1, k2, bend){
+  k1 = k1 == null ? .42 : k1; k2 = k2 == null ? .74 : k2; bend = bend || 0;
+  const m1 = y1 + (y2 - y1) * k1, m2 = y1 + (y2 - y1) * k2;
+  const a = x1 + bend, b = x2 - bend * .35;
+  return `M${r1(x1 - w1/2)} ${r1(y1)} C${r1(a - w1/2)} ${r1(m1)} ${r1(b - w2/2)} ${r1(m2)} ${r1(x2 - w2/2)} ${r1(y2)} `
+       + `L${r1(x2 + w2/2)} ${r1(y2)} C${r1(b + w2/2)} ${r1(m2)} ${r1(a + w1/2)} ${r1(m1)} ${r1(x1 + w1/2)} ${r1(y1)} Z`;
 }
 function almond(cx, cy, L, W){
   return `M${r1(cx)} ${r1(cy - L/2)} C${r1(cx + W/2)} ${r1(cy - L/6)} ${r1(cx + W/2)} ${r1(cy + L/6)} ${r1(cx)} ${r1(cy + L/2)} `
@@ -1585,16 +1645,45 @@ const byBirth = (a, b) => (parseInt(yearOf(P(a).birth)) || 9999) - (parseInt(yea
    founding couple at the root, branches thickening in
    proportion to how many descendants they carry.
    ──────────────────────────────────────────────────────── */
-const TREE_CARD = {w:172, h:32, photo:false};
-const TREE_ROW  = 152;
+const NSZ = 13, SSZ = 12, YSZ = 10;
+/** deterministic wobble, so a redraw never reshuffles the foliage */
+function hash32(s){
+  let h = 2166136261;
+  for(let i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function rng(seed){
+  let s = seed >>> 0;
+  return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
+}
 
 function treeView(pal){
-  const base = layout(TREE_CARD);
+  /* three densities, driven by the same card-detail button as the chart */
+  const showYear  = ui.style !== "compact";
+  const showPhoto = ui.style === "portrait";
+  const PILL_H = showPhoto ? 54 : (showYear ? 44 : 32);
+  const PHOTO  = PILL_H - 16;
+  const ROW    = PILL_H + (showPhoto ? 116 : 108);
+
+  const nameOf = pid => fullName(P(pid));
+  const pw = {};
+  function personW(pid){
+    if(pw[pid] != null) return pw[pid];
+    const p = P(pid);
+    let w = measure(nameOf(pid), NSZ, "ui", 600);
+    if(showYear) w = Math.max(w, measure(lifeLine(p), YSZ, "mono"));
+    w += 22;
+    if(showPhoto) w += PHOTO + 8;
+    return (pw[pid] = Math.max(64, Math.min(300, w)));
+  }
+
+  const base = layout({C:{w:150, h:PILL_H, photo:false}, W:personW,
+                       gapSpouse:30, gapSib:22, gapGroup:34});
   if(!base) return null;
-  const idx = buildIndex(), C = TREE_CARD;
+  const idx = buildIndex();
   const pos = {}; base.nodes.forEach(n => { pos[n.pid] = n; });
   const maxD = base.nodes.reduce((m, n) => Math.max(m, n.depth), 0);
-  const rowY = d => (maxD - d) * TREE_ROW;
+  const rowY = d => (maxD - d) * ROW;
 
   const mate = {};
   for(const b of base.bands){
@@ -1605,7 +1694,8 @@ function treeView(pal){
   }
 
   /* one pill per person and whoever they married — the hub of a
-     remarriage claims its cell first, so nobody is drawn twice */
+     remarriage claims its cell first, so nobody is drawn twice.
+     The pill spans exactly the width the layout already reserved. */
   const cellOf = {}, cells = [];
   const order = base.nodes.slice().sort((a, b) =>
     ((mate[b.pid] || []).length - (mate[a.pid] || []).length) || (a.x - b.x));
@@ -1614,32 +1704,12 @@ function treeView(pal){
     const members = [n.pid];
     for(const m of (mate[n.pid] || [])) if(!cellOf[m.pid]) members.push(m.pid);
     members.sort((p, q) => pos[p].x - pos[q].x);
-    const cell = {members, depth:n.depth, y:rowY(n.depth), h:30,
-                  x: members.reduce((s, p) => s + pos[p].x + C.w/2, 0) / members.length};
+    const left  = Math.min.apply(null, members.map(p => pos[p].x));
+    const right = Math.max.apply(null, members.map(p => pos[p].x + personW(p)));
+    const cell = {members, depth:n.depth, y:rowY(n.depth), h:PILL_H,
+                  w:right - left, x:(left + right) / 2, left};
     members.forEach(p => { cellOf[p] = cell; });
     cells.push(cell);
-  }
-
-  const NSZ = 13, SSZ = 12;
-  const runWidth = r => measure(r.s, r.sep ? SSZ : NSZ, "ui", r.sep ? 400 : 600);
-  for(const cell of cells){
-    const runs = [];
-    cell.members.forEach((pid, i) => {
-      if(i){
-        const prev = cell.members[i-1];
-        const rel = (mate[prev] || []).find(m => m.pid === pid);
-        const u = rel && rel.u;
-        runs.push({sep:true, s: u && u.divorced ? "⚮" : (u && u.status === "partners" ? "◇" : "⚭")});
-      }
-      runs.push({pid, s: fullName(P(pid))});
-    });
-    const total = rs => rs.reduce((t, r) => t + runWidth(r) + 9, 0) + 6;
-    if(total(runs) > 330)                       // trim to first names before it sprawls
-      runs.forEach((r, i) => { if(!r.sep && i > 0) r.s = P(r.pid).first || r.s; });
-    cell.runs = runs;
-    cell.w = Math.max(74, total(runs));
-    let rx = cell.x - cell.w/2 + 6;
-    for(const r of runs){ r.w = runWidth(r); r.x = rx; rx += r.w + 9; }
   }
 
   const dcount = {};
@@ -1652,7 +1722,7 @@ function treeView(pal){
     dcount[pid] = n;
     return n;
   }
-  const weight = c => clamp(3 + Math.sqrt(Math.max.apply(null, c.members.map(desc))) * 2.9, 3, 30);
+  const weight = c => clamp(4 + Math.sqrt(Math.max.apply(null, c.members.map(desc))) * 3.4, 4, 34);
 
   const edges = [], hasKids = new Set();
   for(const uid in S.unions){
@@ -1666,42 +1736,102 @@ function treeView(pal){
   }
 
   const dl = [], hits = [];
-  for(const c of cells.filter(c => c.depth === 0)){          // trunk, roots, ground
-    const w = weight(c) * 1.3, gy = c.y + TREE_ROW * 0.58;
-    dl.push({t:"path", d:taper(c.x, c.y + c.h/2 - 2, c.x, gy, w, w * 1.55), fill:pal.bark, alpha:.95});
-    for(const k of [-1, 1])
-      dl.push({t:"path", stroke:pal.bark, sw:Math.max(2, w * 0.34), cap:"round", alpha:.5,
-               d:`M${r1(c.x)} ${r1(gy - 7)} Q${r1(c.x + k * w * 1.7)} ${r1(gy + 7)} ${r1(c.x + k * (w * 2.7 + 24))} ${r1(gy + 16)}`});
-    dl.push({t:"path", stroke:pal.line2, sw:1.2, cap:"round", alpha:.55,
-             d:`M${r1(c.x - w * 4 - 30)} ${r1(gy + 18)} H${r1(c.x + w * 4 + 30)}`});
-  }
-  for(const e of edges){
-    const w = weight(e.dst);
-    dl.push({t:"path", fill:pal.bark, alpha:.9,
-             d:taper(e.src.x, e.src.y - e.src.h/2 + 2, e.dst.x, e.dst.y + e.dst.h/2 - 2, w * 1.15, w * 0.85)});
-  }
-  for(const c of cells){                                     // new growth at the tips
-    if(hasKids.has(c)) continue;
-    const ly = c.y - c.h/2 - 11;
-    dl.push({t:"path", d:almond(c.x - 10, ly, 21, 9), fill:pal.accent, alpha:.55, rot:-26, rx:c.x - 10, ry:ly});
-    dl.push({t:"path", d:almond(c.x + 10, ly, 18, 8), fill:pal.accent, alpha:.38, rot: 28, rx:c.x + 10, ry:ly});
-  }
-  for(const c of cells){
-    dl.push({t:"rect", x:c.x - c.w/2, y:c.y - c.h/2, w:c.w, h:c.h, r:15,
-             fill:pal.card, stroke:pal.line2, sw:1});
-    for(const r of c.runs){
-      dl.push({t:"text", x:r.x, y:c.y + 4.5, s:r.s, size:r.sep ? SSZ : NSZ,
-               weight:r.sep ? 400 : 600, fill:r.sep ? pal.brass : pal.ink});
-      if(!r.sep) hits.push({pid:r.pid, x:r.x - 4, y:c.y - c.h/2, w:r.w + 8, h:c.h, depth:c.depth});
+  const GREENS = [pal.accent, mix(pal.accent, pal.ink, .22), mix(pal.accent, pal.card, .3)];
+  /** a handful of leaves fanned around a point */
+  function foliage(cx, cy, seed, count, big){
+    const r = rng(seed);
+    for(let i = 0; i < count; i++){
+      const a  = -112 + r() * 224;               // scattered, not fanned
+      const rad = (big ? 10 : 7) + r() * r() * (big ? 34 : 17);
+      const L  = (big ? 16 : 11) + r() * (big ? 15 : 8);
+      const px = cx + Math.cos((a - 90) * Math.PI/180) * rad;
+      const py = cy + Math.sin((a - 90) * Math.PI/180) * rad * .78;
+      dl.push({t:"path", d:almond(px, py, L, L * .46), fill:GREENS[i % 3],
+               alpha:.3 + r() * .3, rot:a, rx:px, ry:py});
     }
+  }
+
+  if(ui.gens){                                    // faint generation guides
+    const gx0 = Math.min.apply(null, cells.map(c => c.x - c.w/2)) - 30;
+    const gx1 = Math.max.apply(null, cells.map(c => c.x + c.w/2)) + 30;
+    for(let d = 0; d <= maxD; d++){
+      const gy = rowY(d) + PILL_H/2 + ROW * 0.30;
+      dl.push({t:"path", d:`M${r1(gx0)} ${r1(gy)} H${r1(gx1)}`, stroke:pal.line,
+               sw:1, dash:"1 6", cap:"round", alpha:.55});
+      dl.push({t:"text", x:gx0 - 12, y:rowY(d) + 4, s:roman(d + 1), size:10, fam:"mono",
+               fill:pal.ink3, anchor:"end", ls:"1.8px"});
+    }
+  }
+
+  for(const c of cells.filter(c => c.depth === 0)){          // trunk, roots, ground
+    const w = weight(c) * 1.35, gy = c.y + ROW * 0.55;
+    dl.push({t:"path", d:taper(c.x, c.y + c.h/2 - 2, c.x, gy, w, w * 1.6), fill:pal.bark, alpha:.95});
+    for(const k of [-1, 1]){
+      dl.push({t:"path", stroke:pal.bark, sw:Math.max(2.5, w * 0.36), cap:"round", alpha:.55,
+               d:`M${r1(c.x)} ${r1(gy - 8)} Q${r1(c.x + k * w * 1.8)} ${r1(gy + 8)} ${r1(c.x + k * (w * 3 + 26))} ${r1(gy + 17)}`});
+      dl.push({t:"path", stroke:pal.bark, sw:Math.max(1.6, w * 0.2), cap:"round", alpha:.35,
+               d:`M${r1(c.x)} ${r1(gy - 4)} Q${r1(c.x + k * w * 1.1)} ${r1(gy + 12)} ${r1(c.x + k * (w * 1.7 + 12))} ${r1(gy + 21)}`});
+    }
+    dl.push({t:"path", stroke:pal.line2, sw:1.3, cap:"round", alpha:.5,
+             d:`M${r1(c.x - w * 4.6 - 34)} ${r1(gy + 20)} H${r1(c.x + w * 4.6 + 34)}`});
+  }
+
+  for(const e of edges){                           // branches, each bending its own way
+    const w = weight(e.dst);
+    const r = rng(hash32(e.dst.members[0] + "b"));
+    const dx = e.dst.x - e.src.x;
+    dl.push({t:"path", fill:pal.bark, alpha:.92,
+             d:taper(e.src.x, e.src.y - e.src.h/2 + 2, e.dst.x, e.dst.y + e.dst.h/2 - 2,
+                     w * 1.2, w * 0.8, .30 + r() * .16, .68 + r() * .14, dx * (.10 + r() * .16))});
+    if(!hasKids.has(e.dst))                        // a little growth along the way
+      foliage(e.dst.x - dx * .12, e.dst.y + e.dst.h/2 + 26, hash32(e.dst.members[0] + "m"), 3, false);
+  }
+  for(const c of cells)                            // new growth at the tips
+    if(!hasKids.has(c)) foliage(c.x, c.y - c.h/2 - 15, hash32(c.members[0]), 7, true);
+
+  for(const c of cells){
+    dl.push({t:"rect", x:c.x - c.w/2, y:c.y - c.h/2 + 2.5, w:c.w, h:c.h, r:PILL_H/2.6,
+             fill:pal.line2, alpha:.28});                       // the pill's own shadow
+    dl.push({t:"rect", x:c.x - c.w/2, y:c.y - c.h/2, w:c.w, h:c.h, r:PILL_H/2.6,
+             fill:pal.card, stroke:pal.line2, sw:1});
+    c.members.forEach((pid, i) => {
+      const p = P(pid), nx = pos[pid].x, nw = personW(pid);
+      if(i){                                                     // union glyph in the gap
+        const prev = c.members[i-1];
+        const rel = (mate[prev] || []).find(m => m.pid === pid);
+        const u = rel && rel.u;
+        const gx = (pos[prev].x + personW(prev) + nx) / 2;
+        dl.push({t:"text", x:gx, y:c.y + 4.5, anchor:"middle", size:SSZ, fill:pal.brass,
+                 s:u && u.divorced ? "⚮" : (u && u.status === "partners" ? "◇" : "⚭")});
+      }
+      let tx = nx + 11, tw = nw - 22;
+      if(showPhoto){
+        const r = PHOTO/2, cx = nx + 8 + r;
+        if(p.photo) dl.push({t:"image", pid, href:p.photo, x:nx + 8, y:c.y - r, w:PHOTO, h:PHOTO,
+                             clip:{cx, cy:c.y, r}});
+        else {
+          dl.push({t:"circle", cx, cy:c.y, r, fill:mix(pal.card, pal.accent, .18)});
+          dl.push({t:"text", x:cx, y:c.y + 5, s:initials(p), size:Math.round(r * .85),
+                   weight:600, fill:pal.ink2, anchor:"middle"});
+        }
+        dl.push({t:"circle", cx, cy:c.y, r, stroke:pal.line2, sw:1});
+        tx = nx + 8 + PHOTO + 9; tw = nw - (tx - nx) - 10;
+      }
+      const yr = showYear ? lifeLine(p) : "";
+      dl.push({t:"text", x:tx, y:c.y + (yr ? -2 : 4.5), s:fitTo(nameOf(pid), tw, NSZ, "ui", 600),
+               size:NSZ, weight:600, fill:pal.ink});
+      if(yr) dl.push({t:"text", x:tx, y:c.y + 14, s:yr, size:YSZ, fam:"mono", fill:pal.ink2});
+      hits.push({pid, x:nx - 3, y:c.y - c.h/2, w:nw + 6, h:c.h, depth:c.depth});
+    });
   }
 
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
   for(const c of cells){
     x0 = Math.min(x0, c.x - c.w/2); x1 = Math.max(x1, c.x + c.w/2);
-    y0 = Math.min(y0, c.y - c.h/2 - 34); y1 = Math.max(y1, c.y + c.h/2);
+    y0 = Math.min(y0, c.y - c.h/2 - 64); y1 = Math.max(y1, c.y + c.h/2);
   }
-  y1 += TREE_ROW * 0.58 + 26;
+  if(ui.gens) x0 -= 56;
+  y1 += ROW * 0.55 + 30;
   return {kind:"tree", dl, hits, nodes:hits, rows:base.rows, ancestors:base.ancestors,
           box:{x:x0 - PAD, y:y0 - PAD, w:(x1 - x0) + PAD*2, h:(y1 - y0) + PAD*2}};
 }
@@ -1823,7 +1953,7 @@ function fanView(pal){
    One bar per life. Brass ties mark the year two of them met.
    ──────────────────────────────────────────────────────── */
 function timeView(pal){
-  const base = layout(CARD.compact);
+  const base = layout({C:CARD.compact});
   if(!base) return null;
   const depth = {}; base.nodes.forEach(n => { depth[n.pid] = n.depth; });
   const NOW = new Date().getFullYear();
@@ -1920,7 +2050,7 @@ function timeView(pal){
    1.2.1 tells you exactly where someone sits without a chart.
    ──────────────────────────────────────────────────────── */
 function registerView(pal){
-  const base = layout(CARD.compact);
+  const base = layout({C:CARD.compact});
   if(!base) return null;
   const idx = buildIndex();
   const onChart = new Set(base.nodes.map(n => n.pid));
@@ -2476,12 +2606,49 @@ function pickPhoto(pid){
    PRINT & EXPORT
    ═══════════════════════════════════════════════════════════ */
 let printOpts = {
-  paper:"A2", orient:"landscape", margin:12, fitMode:"fit",
-  scale:100, title:"", subtitle:"", note:"", crop:true, overlap:5
+  paper:"A2", orient:"landscape", margin:12,
+  fitMode:"fit",                      // fit · wide (n sheets across) · scale (exact %)
+  sheetsWide:3, scale:100,
+  crop:true, overlap:5, frame:false, guide:true,
+  tint:"white", ink:"colour", dpi:300,
+  legend:true, stamp:true, count:false, qr:false, qrUrl:"",
+  title:"", subtitle:"", note:""
 };
+const PRESETS = {
+  handout : {label:"A4 handout",  hint:"one sheet, portrait",   paper:"A4", orient:"portrait",  fitMode:"fit", margin:14},
+  chart   : {label:"A3 chart",    hint:"one sheet, landscape",  paper:"A3", orient:"landscape", fitMode:"fit", margin:12},
+  poster  : {label:"A2 poster",   hint:"framed size",           paper:"A2", orient:"landscape", fitMode:"fit", margin:12, frame:true},
+  wall    : {label:"A1 wall",     hint:"big single sheet",      paper:"A1", orient:"landscape", fitMode:"fit", margin:14, frame:true},
+  mural   : {label:"Mural",       hint:"A3 sheets, 3 across",   paper:"A3", orient:"landscape", fitMode:"wide", sheetsWide:3, margin:8, crop:true}
+};
+const TINTS = {white:"#FFFFFF", cream:"#FAF5E9", none:null};
+
+/** the register palette, dropped to greys when printing in one ink */
+function greyPal(p){
+  const out = Object.assign({}, p);
+  for(const k in out){
+    if(typeof out[k] === "string" && out[k][0] === "#"){
+      let s = out[k].replace("#", "");
+      if(s.length === 3) s = s.split("").map(c => c + c).join("");
+      const l = Math.round(.299 * parseInt(s.slice(0,2),16)
+                         + .587 * parseInt(s.slice(2,4),16)
+                         + .114 * parseInt(s.slice(4,6),16));
+      out[k] = "#" + [l,l,l].map(v => v.toString(16).padStart(2, "0")).join("");
+    }
+  }
+  out.monoS = 0; out.monoTS = 0;
+  return out;
+}
+let _greyCache = null;
+function printPal(){
+  if(printOpts.ink !== "mono") return PAL.light;
+  return (_greyCache = _greyCache || greyPal(PAL.light));
+}
+function paperFill(){ return TINTS[printOpts.tint] || "#FFFFFF"; }
 
 function printDialog(){
   if(!LAY){ return toast("Nothing to print yet", true); }
+  printOpts.qrUrl = "";                 // the family may have changed since last time
   if(!printOpts.title){
     printOpts.title = S.meta.title || guessTitle();
     printOpts.subtitle = S.meta.subtitle || guessSubtitle();
@@ -2498,10 +2665,17 @@ function printDialog(){
       </div>
       <div class="modal-body"><div class="setup">
         <div>
-          <fieldset style="padding-top:0"><legend>Paper</legend>
+          <fieldset style="padding-top:0"><legend>Start from</legend>
+            <div class="presets">
+              ${Object.keys(PRESETS).map(k => `<button class="preset" data-preset="${k}">
+                <b>${esc(PRESETS[k].label)}</b><span>${esc(PRESETS[k].hint)}</span></button>`).join("")}
+            </div>
+          </fieldset>
+
+          <fieldset><legend>Paper</legend>
             <div class="fgrid two">
               <label class="f"><span>Size</span><select id="pPaper">
-                ${Object.keys(PAPERS).map(k => `<option value="${k}"${printOpts.paper===k?" selected":""}>${k}${k.startsWith("A")?" &nbsp;"+PAPERS[k][0]+"×"+PAPERS[k][1]+"mm":""}</option>`).join("")}
+                ${Object.keys(PAPERS).map(k => `<option value="${k}"${printOpts.paper===k?" selected":""}>${k}${k.startsWith("A")?" · "+PAPERS[k][0]+"×"+PAPERS[k][1]+"mm":""}</option>`).join("")}
               </select></label>
               <label class="f"><span>Orientation</span><select id="pOrient">
                 <option value="landscape"${printOpts.orient==="landscape"?" selected":""}>Landscape</option>
@@ -2512,15 +2686,42 @@ function printDialog(){
               <label class="f"><span>Margin (mm)</span><input id="pMargin" type="number" min="0" max="40" value="${printOpts.margin}"></label>
               <label class="f"><span>Layout</span><select id="pFit">
                 <option value="fit"${printOpts.fitMode==="fit"?" selected":""}>One sheet — shrink to fit</option>
-                <option value="tile"${printOpts.fitMode==="tile"?" selected":""}>Poster — tile across sheets</option>
+                <option value="wide"${printOpts.fitMode==="wide"?" selected":""}>Poster — N sheets across</option>
+                <option value="scale"${printOpts.fitMode==="scale"?" selected":""}>Poster — exact print size</option>
               </select></label>
             </div>
-            <div class="fgrid two" style="margin-top:9px" id="pTileRow">
-              <label class="f"><span>Print size</span><input id="pScale" type="number" min="10" max="400" step="5" value="${printOpts.scale}">
-                <span class="hint">% of actual card size</span></label>
+            <div class="fgrid two" style="margin-top:9px" id="pWideRow">
+              <label class="f"><span>Sheets across</span><input id="pWide" type="number" min="1" max="12" value="${printOpts.sheetsWide}"></label>
               <label class="f"><span>Glue overlap (mm)</span><input id="pOverlap" type="number" min="0" max="20" value="${printOpts.overlap}"></label>
             </div>
-            <label class="checkline" style="margin-top:8px"><input type="checkbox" id="pCrop"${printOpts.crop?" checked":""}> Corner marks and sheet labels</label>
+            <div class="fgrid two" style="margin-top:9px" id="pScaleRow">
+              <label class="f"><span>Print size</span><input id="pScale" type="number" min="10" max="400" step="5" value="${printOpts.scale}">
+                <span class="hint">% of on-screen size</span></label>
+              <label class="f"><span>Glue overlap (mm)</span><input id="pOverlap2" type="number" min="0" max="20" value="${printOpts.overlap}"></label>
+            </div>
+          </fieldset>
+
+          <fieldset><legend>Ink &amp; paper</legend>
+            <div class="fgrid two">
+              <label class="f"><span>Ink</span><select id="pInk">
+                <option value="colour"${printOpts.ink==="colour"?" selected":""}>Full colour</option>
+                <option value="mono"${printOpts.ink==="mono"?" selected":""}>Black &amp; white</option>
+              </select></label>
+              <label class="f"><span>Paper tint</span><select id="pTint">
+                <option value="white"${printOpts.tint==="white"?" selected":""}>White</option>
+                <option value="cream"${printOpts.tint==="cream"?" selected":""}>Warm cream</option>
+                <option value="none"${printOpts.tint==="none"?" selected":""}>None (transparent export)</option>
+              </select></label>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin-top:9px">
+              <label class="checkline"><input type="checkbox" id="pFrame"${printOpts.frame?" checked":""}> Frame rule</label>
+              <label class="checkline"><input type="checkbox" id="pLegend"${printOpts.legend?" checked":""}> Symbol key</label>
+              <label class="checkline"><input type="checkbox" id="pStamp"${printOpts.stamp?" checked":""}> Date printed</label>
+              <label class="checkline"><input type="checkbox" id="pCount"${printOpts.count?" checked":""}> People counted</label>
+              <label class="checkline"><input type="checkbox" id="pCrop"${printOpts.crop?" checked":""}> Corner &amp; sheet marks</label>
+              <label class="checkline"><input type="checkbox" id="pGuide"${printOpts.guide?" checked":""}> Assembly sheet</label>
+              <label class="checkline" style="grid-column:1/-1"><input type="checkbox" id="pQR"${printOpts.qr?" checked":""}> Print a QR code to the shared tree</label>
+            </div>
           </fieldset>
 
           <fieldset><legend>Heading</legend>
@@ -2535,11 +2736,20 @@ function printDialog(){
         <div class="prev">
           <div id="prevMount"></div>
           <div class="prev-note" id="prevNote"></div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center">
-            <button class="btn sm" id="pPNG">Save PNG</button>
-            <button class="btn sm" id="pSVG">Save SVG</button>
-            <button class="btn sm" id="pJSON">Save data</button>
-          </div>
+          <fieldset style="padding-top:6px;width:100%">
+            <legend>Save a file</legend>
+            <label class="f"><span>Image resolution</span><select id="pDpi">
+              <option value="150"${printOpts.dpi==150?" selected":""}>150 dpi — screens, messaging</option>
+              <option value="300"${printOpts.dpi==300?" selected":""}>300 dpi — print quality</option>
+              <option value="600"${printOpts.dpi==600?" selected":""}>600 dpi — fine detail</option>
+            </select></label>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:10px">
+              <button class="btn sm" id="pPNG">PNG</button>
+              <button class="btn sm" id="pSVG">SVG</button>
+              <button class="btn sm" id="pCSV">CSV</button>
+              <button class="btn sm" id="pJSON">Family file</button>
+            </div>
+          </fieldset>
         </div>
       </div>
       <div class="notice">
@@ -2559,23 +2769,45 @@ function printDialog(){
     printOpts.orient  = $("#pOrient").value;
     printOpts.margin  = clamp(+$("#pMargin").value || 0, 0, 40);
     printOpts.fitMode = $("#pFit").value;
+    printOpts.sheetsWide = clamp(+$("#pWide").value || 1, 1, 12);
     printOpts.scale   = clamp(+$("#pScale").value || 100, 10, 400);
-    printOpts.overlap = clamp(+$("#pOverlap").value || 0, 0, 20);
+    printOpts.overlap = clamp(+(printOpts.fitMode === "scale" ? $("#pOverlap2") : $("#pOverlap")).value || 0, 0, 20);
+    printOpts.ink     = $("#pInk").value;
+    printOpts.tint    = $("#pTint").value;
+    printOpts.dpi     = +$("#pDpi").value || 300;
+    printOpts.frame   = $("#pFrame").checked;
+    printOpts.legend  = $("#pLegend").checked;
+    printOpts.stamp   = $("#pStamp").checked;
+    printOpts.count   = $("#pCount").checked;
     printOpts.crop    = $("#pCrop").checked;
+    printOpts.guide   = $("#pGuide").checked;
+    printOpts.qr      = $("#pQR").checked;
     printOpts.title   = $("#pTitle").value;
     printOpts.subtitle= $("#pSub").value;
     printOpts.note    = $("#pNote").value;
     S.meta = {title:printOpts.title, subtitle:printOpts.subtitle, note:printOpts.note};
     save();
-    $("#pTileRow").style.display = printOpts.fitMode === "tile" ? "" : "none";
-    paintPreview();
+    $("#pWideRow").style.display  = printOpts.fitMode === "wide"  ? "" : "none";
+    $("#pScaleRow").style.display = printOpts.fitMode === "scale" ? "" : "none";
+    if(printOpts.qr && !printOpts.qrUrl)
+      shareURL({photos:false, view:ui.view}).then(u => { printOpts.qrUrl = u; });
+    /* re-planning walks the whole family, so let typing settle first */
+    clearTimeout(read.t);
+    read.t = setTimeout(paintPreview, 120);
   };
   $$("#modalMount input, #modalMount select").forEach(el => {
     el.addEventListener("input", read); el.addEventListener("change", read);
   });
+  $$("#modalMount [data-preset]").forEach(b => b.addEventListener("click", () => {
+    Object.assign(printOpts, PRESETS[b.dataset.preset]);
+    delete printOpts.label; delete printOpts.hint;
+    closeModal(); printDialog();
+    toast(PRESETS[b.dataset.preset].label);
+  }));
   $("#pGo").addEventListener("click", () => { read(); doPrint(); });
   $("#pPNG").addEventListener("click", () => { read(); exportPNG(); });
   $("#pSVG").addEventListener("click", () => { read(); exportSVG(); });
+  $("#pCSV").addEventListener("click", () => { read(); exportCSV(); });
   $("#pJSON").addEventListener("click", () => { read(); exportJSON(); });
   read();
 }
@@ -2606,22 +2838,25 @@ function planSheets(){
   const pageH = (land ? Math.min(pw0, ph0) : Math.max(pw0, ph0)) * MM;
   const m     = printOpts.margin * MM;
   const hasTitle = !!(printOpts.title || printOpts.subtitle);
-  const footH = printOpts.note || printOpts.crop ? 7 * MM : 0;
-  /* the sheet is always drawn in the register's light palette,
+  const anyFoot = printOpts.note || printOpts.crop || printOpts.legend
+               || printOpts.stamp || printOpts.count;
+  const footH = anyFoot ? (printOpts.legend ? 11 : 7) * MM : 0;
+  /* the sheet is always drawn in the register's print palette,
      whatever the screen is showing */
-  const model = makeModel(PAL.light) || LAY;
+  const model = makeModel(printPal()) || LAY;
   const box   = boxWithTitle(model, hasTitle);
+  const availW = pageW - 2*m, availH = pageH - 2*m - footH;
 
   if(printOpts.fitMode === "fit"){
-    const availW = pageW - 2*m, availH = pageH - 2*m - footH;
-    const scale  = Math.min(availW / box.w, availH / box.h);
+    const scale = Math.min(availW / box.w, availH / box.h);
     return {pageW, pageH, m, footH, hasTitle, box, model, scale, cols:1, rows:1, tiled:false,
             availW, availH, over:0};
   }
-  const scale = printOpts.scale / 100;
   const over  = printOpts.overlap * MM;
-  const availW = pageW - 2*m, availH = pageH - 2*m - footH;
   const stepW = Math.max(40, availW - over), stepH = Math.max(40, availH - over);
+  const scale = printOpts.fitMode === "wide"
+    ? (clamp(printOpts.sheetsWide, 1, 12) * stepW + over) / box.w
+    : printOpts.scale / 100;
   const cols = Math.max(1, Math.ceil((box.w * scale - over) / stepW));
   const rows = Math.max(1, Math.ceil((box.h * scale - over) / stepH));
   return {pageW, pageH, m, footH, hasTitle, box, model, scale, cols, rows, tiled:true,
@@ -2634,11 +2869,12 @@ function paintPreview(){
   const maxW = 268, maxH = 200;
   const gw = plan.pageW * plan.cols, gh = plan.pageH * plan.rows;
   const k = Math.min(maxW / gw, maxH / gh);
-  const svgInner = viewSVG(plan.model, {selectable:false, ns:"pv", pal:PAL.light,
+  const svgInner = viewSVG(plan.model, {selectable:false, ns:"pv", pal:printPal(),
     title: plan.hasTitle ? {main:printOpts.title, sub:printOpts.subtitle} : null});
   const b = plan.box;
 
-  mount.innerHTML = `<div class="sheetprev" style="width:${(gw*k).toFixed(1)}px;height:${(gh*k).toFixed(1)}px">
+  mount.innerHTML = `<div class="sheetprev${printOpts.ink === "mono" ? " ink-mono" : ""}"
+      style="width:${(gw*k).toFixed(1)}px;height:${(gh*k).toFixed(1)}px;background:${paperFill() || "#fff"}">
     <div style="position:absolute;left:${(plan.m*k).toFixed(1)}px;top:${(plan.m*k).toFixed(1)}px;
                 width:${((gw - 2*plan.m)*k).toFixed(1)}px;height:${((gh - 2*plan.m)*k).toFixed(1)}px;overflow:hidden">
       <svg width="${(b.w*plan.scale*k).toFixed(1)}" height="${(b.h*plan.scale*k).toFixed(1)}"
@@ -2652,57 +2888,138 @@ function paintPreview(){
   </div>`;
 
   const n = plan.cols * plan.rows;
-  const cm = (v) => (v / MM / 10).toFixed(0);
+  const cm = v => (v / MM / 10).toFixed(0);
+  const guide = plan.tiled && printOpts.guide && n > 1 ? 1 : 0;
+  /* names print legibly at roughly a third of on-screen size and up */
+  const tight = plan.scale < 0.34;
   $("#prevNote").innerHTML = plan.tiled
-    ? `<b>${n} sheet${n>1?"s":""}</b> — ${plan.cols} across × ${plan.rows} down<br>`
-      + `assembled: <b>${cm(plan.cols*plan.pageW)} × ${cm(plan.rows*plan.pageH)} cm</b>`
-    : `<b>1 sheet</b> — chart drawn at <b>${Math.round(plan.scale*100)}%</b><br>`
-      + (plan.scale < 0.34 ? `<span style="color:var(--danger)">names will be very small — try a poster tile</span>`
-                           : `names stay legible`);
+    ? `<b>${n} sheet${n>1?"s":""}</b>${guide ? " + assembly sheet" : ""} — ${plan.cols} across × ${plan.rows} down<br>`
+      + `assembled: <b>${cm(plan.cols*plan.pageW)} × ${cm(plan.rows*plan.pageH)} cm</b> `
+      + `<span style="opacity:.7">at ${Math.round(plan.scale*100)}%</span>`
+    : `<b>1 sheet</b> · ${printOpts.paper} ${printOpts.orient} — drawn at <b>${Math.round(plan.scale*100)}%</b><br>`
+      + (tight ? `<span style="color:var(--danger)">names will be very small — try a poster</span>`
+               : `names stay legible`);
 }
+
+const LEGEND_TEXT = "∗ born    † died    ⚭ married    ⚮ divorced    ◇ partners";
+/** the QR the poster carries, so anyone can scan the tree onto their phone */
+function qrShape(text, cell){
+  if(typeof qrcode !== "function" || !text) return null;
+  try {
+    const q = qrcode(0, "M");
+    q.addData(text); q.make();
+    const n = q.getModuleCount();
+    let d = "";
+    for(let r = 0; r < n; r++)
+      for(let c = 0; c < n; c++)
+        if(q.isDark(r, c)) d += `M${c*cell} ${r*cell}h${cell}v${cell}h${-cell}z`;
+    return {d, size:n * cell};
+  } catch(e){ return null; }
+}
+function qrBlock(px){
+  const q = qrShape(printOpts.qrUrl, 3);
+  if(!q) return "";
+  const k = px / q.size;
+  return `<div style="position:absolute;right:${(planPad())}px;bottom:${(planPad() + 22)}px;text-align:center">
+    <svg width="${px}" height="${px}" viewBox="0 0 ${q.size} ${q.size}">
+      <rect width="${q.size}" height="${q.size}" fill="#fff"/><path d="${q.d}" fill="#141C22"/></svg>
+    <div style="font:400 6.5px ${FAM.mono};color:#4B5A62;margin-top:2px">scan to open the tree</div>
+  </div>`;
+}
+let _planPad = 12;
+function planPad(){ return _planPad; }
 
 function buildPrintSheets(){
   const plan = planSheets();
+  _planPad = plan.m;
   const root = $("#printRoot");
   const b = plan.box;
-  const svgInner = viewSVG(plan.model, {selectable:false, ns:"pr", pal:PAL.light,
+  const pal = printPal();
+  const svgInner = viewSVG(plan.model, {selectable:false, ns:"pr", pal,
     title: plan.hasTitle ? {main:printOpts.title, sub:printOpts.subtitle} : null});
   const svgFor = (w, h) =>
     `<svg width="${w.toFixed(1)}" height="${h.toFixed(1)}" viewBox="${r1(b.x)} ${r1(b.y)} ${r1(b.w)} ${r1(b.h)}"
       xmlns="http://www.w3.org/2000/svg">${svgInner}</svg>`;
 
-  let css = `@page{size:${(plan.pageW/MM).toFixed(1)}mm ${(plan.pageH/MM).toFixed(1)}mm;margin:0}`;
-  let html = `<style>${css}</style>`;
+  const ground = paperFill();
+  let html = `<style>@page{size:${(plan.pageW/MM).toFixed(1)}mm ${(plan.pageH/MM).toFixed(1)}mm;margin:0}`
+           + `#printRoot .sheet{background:${ground}}</style>`;
   const drawnW = b.w * plan.scale, drawnH = b.h * plan.scale;
+  const nSheets = plan.cols * plan.rows;
 
-  const foot = (left, right) => plan.footH ? `
-    <div style="position:absolute;left:${plan.m}px;right:${plan.m}px;bottom:${(plan.m*0.55).toFixed(1)}px">
-      <div class="pfoot" style="font-size:8.5px"><span>${esc(left)}</span><span>${esc(right)}</span></div>
-    </div>` : "";
+  const frame = printOpts.frame ? `<div style="position:absolute;left:${(plan.m*0.55).toFixed(1)}px;`
+    + `top:${(plan.m*0.55).toFixed(1)}px;right:${(plan.m*0.55).toFixed(1)}px;`
+    + `bottom:${(plan.m*0.55).toFixed(1)}px;border:1px solid ${pal.brass};pointer-events:none"></div>` : "";
+
+  const foot = (left, right) => {
+    if(!plan.footH) return "";
+    const bits = [];
+    if(printOpts.count) bits.push(Object.keys(S.people).length + " people");
+    if(printOpts.stamp) bits.push(dateStamp());
+    const rightText = [right, bits.join("  ·  ")].filter(Boolean).join("   ");
+    return `<div style="position:absolute;left:${plan.m}px;right:${plan.m}px;bottom:${(plan.m*0.5).toFixed(1)}px">
+      ${printOpts.legend ? `<div class="pfoot" style="font-size:8px;justify-content:center;color:${pal.ink3};margin-bottom:3px">
+        <span style="letter-spacing:.06em">${LEGEND_TEXT}</span></div>` : ""}
+      <div class="pfoot" style="font-size:8.5px;color:${pal.ink3}"><span>${esc(left)}</span><span>${esc(rightText)}</span></div>
+    </div>`;
+  };
+
+  /* an assembly sheet first, so a mural can be laid out before it is glued */
+  if(plan.tiled && printOpts.guide && nSheets > 1){
+    const gw = 300, gh = gw * (plan.rows * plan.pageH) / (plan.cols * plan.pageW);
+    html += `<div class="sheet" style="width:${plan.pageW}px;height:${plan.pageH}px">
+      <div style="position:absolute;left:${plan.m}px;top:${plan.m}px;right:${plan.m}px">
+        <div class="ptitle" style="font-size:26px">${esc(printOpts.title || "Assembly")}</div>
+        <div class="psub" style="font-size:12px;margin-top:4px">
+          ${nSheets} sheets · ${plan.cols} across × ${plan.rows} down ·
+          finished size ${(plan.cols*plan.pageW/MM/10).toFixed(0)} × ${(plan.rows*plan.pageH/MM/10).toFixed(0)} cm
+          ${printOpts.overlap ? " · " + printOpts.overlap + " mm glue overlap" : ""}
+        </div>
+        <div class="rule" style="margin:10px 0 16px"></div>
+        <div style="position:relative;width:${gw}px;height:${gh.toFixed(1)}px;border:1px solid ${pal.line2}">
+          ${Array.from({length:nSheets}, (_, i) => {
+            const c = i % plan.cols, r = Math.floor(i / plan.cols);
+            return `<div style="position:absolute;left:${(c*gw/plan.cols).toFixed(1)}px;top:${(r*gh/plan.rows).toFixed(1)}px;
+              width:${(gw/plan.cols).toFixed(1)}px;height:${(gh/plan.rows).toFixed(1)}px;
+              border:1px dashed ${pal.line2};display:flex;align-items:center;justify-content:center;
+              font:400 13px ${FAM.mono};color:${pal.ink2}">${i+1}</div>`;
+          }).join("")}
+        </div>
+        <div style="font:400 9.5px ${FAM.mono};color:${pal.ink3};margin-top:12px;line-height:1.7">
+          Sheets are numbered left to right, top to bottom.<br>
+          Trim to the corner marks, overlap each sheet onto the one to its left and above, then tape from behind.
+        </div>
+      </div>
+      ${qrBlock(74)}
+    </div>`;
+  }
 
   if(!plan.tiled){
     const ox = plan.m + (plan.availW - drawnW) / 2;
     const oy = plan.m + (plan.availH - drawnH) / 2;
     html += `<div class="sheet" style="width:${plan.pageW}px;height:${plan.pageH}px">
       <div style="position:absolute;left:${ox.toFixed(1)}px;top:${oy.toFixed(1)}px">${svgFor(drawnW, drawnH)}</div>
-      ${foot(printOpts.note, dateStamp())}
+      ${frame}${printOpts.qr ? qrBlock(60) : ""}
+      ${foot(printOpts.note, "")}
     </div>`;
   } else {
     for(let r = 0; r < plan.rows; r++){
       for(let c = 0; c < plan.cols; c++){
         const offX = c * plan.stepW, offY = r * plan.stepH;
-        const marks = printOpts.crop ? cropMarks(plan) : "";
+        const last = r === plan.rows - 1 && c === plan.cols - 1;
         html += `<div class="sheet" style="width:${plan.pageW}px;height:${plan.pageH}px">
           <div class="clipbox" style="left:${plan.m}px;top:${plan.m}px;width:${plan.availW.toFixed(1)}px;height:${plan.availH.toFixed(1)}px">
             <div style="position:absolute;left:${(-offX).toFixed(1)}px;top:${(-offY).toFixed(1)}px">${svgFor(drawnW, drawnH)}</div>
           </div>
-          ${marks}
+          ${printOpts.crop ? cropMarks(plan) : ""}${frame}
+          ${printOpts.qr && last ? qrBlock(56) : ""}
           ${foot((printOpts.note ? printOpts.note + "  ·  " : "") + printOpts.title,
-                 `row ${r+1} · col ${c+1}   (sheet ${r*plan.cols+c+1} of ${plan.cols*plan.rows})`)}
+                 `row ${r+1} · col ${c+1}   (sheet ${r*plan.cols+c+1} of ${nSheets})`)}
         </div>`;
       }
     }
   }
+  root.className = printOpts.ink === "mono" ? "ink-mono" : "";
   root.innerHTML = html;
   return plan;
 }
@@ -2750,28 +3067,52 @@ function slug(){
   return ui.view === "chart" ? base : base + "-" + ui.view;
 }
 async function exportPNG(){
-  const model = makeModel(PAL.light);
+  const plan = planSheets();
+  const model = plan.model;
   if(!model) return;
-  const hasTitle = !!(printOpts.title || printOpts.subtitle);
-  const box = boxWithTitle(model, hasTitle);
-  const target = 3800;                      // a comfortable poster raster
+  const hasTitle = plan.hasTitle;
+  const box = plan.box;
+  /* the chart is printed at plan.scale CSS px, i.e. plan.scale/MM mm wide;
+     rendering that many mm at the chosen dpi gives scale · dpi / 96 */
   const MAXPX = 11000;                      // stay inside the browser's canvas limit
-  const scale = Math.max(0.35, Math.min(clamp(target / box.w, 1, 4),
-                                        MAXPX / box.w, MAXPX / (box.h + 72)));
-  const cv = viewPaint(model, scale, "light",
+  const scale = Math.max(0.35, Math.min(plan.scale * printOpts.dpi / 96,
+                                        MAXPX / box.w, MAXPX / box.h));
+  const cv = viewPaint(model, scale, printPal(),
                        hasTitle ? {main:printOpts.title, sub:printOpts.subtitle} : null);
   cv.toBlob(async blob => {
     if(!blob) return toast("Could not build the image", true);
     const ok = await offer(slug() + ".png", blob, "image/png");
-    if(ok) toast("PNG saved · " + cv.width + "×" + cv.height);
+    if(ok) toast("PNG saved · " + cv.width + "×" + cv.height + " · " + printOpts.dpi + " dpi");
   }, "image/png");
 }
+async function exportCSV(){
+  const idx = buildIndex();
+  const head = ["Name","Née","Born","Died","Place","Occupation","Partners","Parents","Children","Notes"];
+  const cell = v => {
+    const s = String(v == null ? "" : v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const lines = [head.join(",")];
+  for(const id in S.people){
+    const p = P(id), i = idx[id];
+    const partners = i.unions.map(uid => {
+      const u = U(uid), sp = partnerOf(u, id);
+      return (sp && P(sp) ? fullName(P(sp)) : "unknown")
+           + (yearOf(u.date) ? " (" + (u.divorced ? "div. " : "m. ") + yearOf(u.date) + ")" : "");
+    }).join("; ");
+    lines.push([fullName(p), p.maiden, p.birth, p.death, p.place, p.occupation, partners,
+                i.parents.map(q => fullName(P(q))).join("; "),
+                i.kids.map(k => fullName(P(k))).join("; "), p.notes].map(cell).join(","));
+  }
+  const ok = await offer(slug() + ".csv", "﻿" + lines.join("\r\n"), "text/csv");
+  if(ok) toast(Object.keys(S.people).length + " people saved as CSV");
+}
 async function exportSVG(){
-  const model = makeModel(PAL.light);
+  const model = makeModel(printPal());
   if(!model) return;
   const hasTitle = !!(printOpts.title || printOpts.subtitle);
   const box = boxWithTitle(model, hasTitle);
-  const inner = viewSVG(model, {selectable:false, ns:"ex", pal:PAL.light,
+  const inner = viewSVG(model, {selectable:false, ns:"ex", pal:printPal(),
                                 title: hasTitle ? {main:printOpts.title, sub:printOpts.subtitle} : null});
   const style = `
     @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Mono&family=Public+Sans:wght@400;500;600&display=swap");
@@ -2797,7 +3138,7 @@ async function exportSVG(){
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
      width="${r1(box.w)}" height="${r1(box.h)}" viewBox="${r1(box.x)} ${r1(box.y)} ${r1(box.w)} ${r1(box.h)}">
 <style>${style}</style>
-<rect x="${r1(box.x)}" y="${r1(box.y)}" width="${r1(box.w)}" height="${r1(box.h)}" fill="#ffffff"/>
+${paperFill() ? `<rect x="${r1(box.x)}" y="${r1(box.y)}" width="${r1(box.w)}" height="${r1(box.h)}" fill="${paperFill()}"/>` : ""}
 ${inner}
 </svg>`;
   const ok = await offer(slug() + ".svg", doc, "image/svg+xml");
@@ -2808,7 +3149,7 @@ async function exportJSON(){
   const ok = await offer(slug() + ".json", doc, "application/json");
   if(ok){ ui.dirty = false; toast("Family data saved"); }
 }
-function importJSON(){
+function importJSON(mode){
   const inp = document.createElement("input");
   inp.type = "file"; inp.accept = ".json,application/json";
   inp.addEventListener("change", () => {
@@ -2819,11 +3160,7 @@ function importJSON(){
         const j = JSON.parse(fr.result);
         const d = j && j.data ? j.data : j;
         if(!d || !d.people) throw new Error("no people");
-        snapshot();
-        S = normalise(d);
-        ui.isSample = false; ui.sel = null; ui.focus = null;
-        save(); render(); fitView();
-        toast("Opened " + Object.keys(S.people).length + " people");
+        importDoc(d, mode || "replace");
       } catch(err){ toast("That file isn’t an Heirloom family file", true); }
     };
     fr.readAsText(f);
@@ -2866,6 +3203,12 @@ function fileDialog(){
           <button class="rel-item" style="width:100%;text-align:left" id="fOpen">
             <span class="txt"><span class="nm">Open a family file</span>
             <span class="meta">replaces what is on screen</span></span></button>
+          <button class="rel-item" style="width:100%;text-align:left" id="fMerge">
+            <span class="txt"><span class="nm">Merge a family file</span>
+            <span class="meta">folds a relative’s additions in without duplicating anyone</span></span></button>
+          <button class="rel-item" style="width:100%;text-align:left" id="fShare">
+            <span class="txt"><span class="nm">Share a link</span>
+            <span class="meta">the whole tree in one URL — no account needed</span></span></button>
           <button class="rel-item" style="width:100%;text-align:left" id="fCopy">
             <span class="txt"><span class="nm">Copy data to clipboard</span>
             <span class="meta">paste it anywhere as a backup</span></span></button>
@@ -2886,7 +3229,9 @@ function fileDialog(){
       <div class="modal-foot"><span class="spring"></span><button class="btn" data-close>Close</button></div>
     </div>`);
   $("#fSave").addEventListener("click", () => { closeModal(); exportJSON(); });
-  $("#fOpen").addEventListener("click", () => { closeModal(); importJSON(); });
+  $("#fOpen").addEventListener("click", () => { closeModal(); importJSON("replace"); });
+  $("#fMerge").addEventListener("click", () => { closeModal(); importJSON("merge"); });
+  $("#fShare").addEventListener("click", () => { closeModal(); shareDialog(); });
   $("#fCopy").addEventListener("click", async () => {
     const doc = JSON.stringify({app:"heirloom", version:1, data:S});
     try { await navigator.clipboard.writeText(doc); toast("Copied — paste it somewhere safe"); }
@@ -2929,6 +3274,242 @@ function pasteDialog(){
       closeModal(); save(); render(); fitView();
       toast("Loaded " + Object.keys(S.people).length + " people");
     } catch(e){ toast("That text isn’t family data", true); }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SHARING
+   The whole family goes in the URL's fragment, so it never
+   reaches a server — no account, no backend, nothing to run.
+   Everyone who opens the link gets their own copy to explore
+   and add to; changes come back as a link or a file.
+   ═══════════════════════════════════════════════════════════ */
+const HOSTED_URL = "https://hedaprateek.github.io/heirloom-family-tree/";
+
+function b64url(bytes){
+  let s = "";
+  for(let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function unb64url(s){
+  s = s.replace(/-/g, "+").replace(/_/g, "/");
+  while(s.length % 4) s += "=";
+  const bin = atob(s), out = new Uint8Array(bin.length);
+  for(let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+async function pack(str){
+  const bytes = new TextEncoder().encode(str);
+  if(typeof CompressionStream === "function"){
+    try {
+      const cs = new CompressionStream("deflate-raw");
+      const buf = await new Response(new Blob([bytes]).stream().pipeThrough(cs)).arrayBuffer();
+      return "z" + b64url(new Uint8Array(buf));
+    } catch(e){ /* fall through to plain */ }
+  }
+  return "u" + b64url(bytes);
+}
+async function unpack(s){
+  const bytes = unb64url(s.slice(1));
+  if(s[0] === "z"){
+    const ds = new DecompressionStream("deflate-raw");
+    const buf = await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer();
+    return new TextDecoder().decode(buf);
+  }
+  return new TextDecoder().decode(bytes);
+}
+function linkBase(){
+  if(location.protocol === "file:") return HOSTED_URL;
+  return location.origin + location.pathname;
+}
+async function shareURL(o){
+  o = o || {};
+  const people = {};
+  for(const id in S.people){
+    const p = Object.assign({}, S.people[id]);
+    if(!o.photos) p.photo = "";
+    for(const k in p) if(p[k] === "" || p[k] === false) delete p[k];
+    p.id = id;
+    people[id] = p;
+  }
+  const doc = {app:"heirloom", version:1, data:{people, unions:S.unions, meta:S.meta, seq:S.seq}};
+  const packed = await pack(JSON.stringify(doc));
+  const q = o.view && o.view !== "chart" ? "?view=" + o.view : "";
+  return (o.base || linkBase()) + q + "#f=" + packed;
+}
+
+function shareDialog(){
+  if(!Object.keys(S.people).length) return toast("Add someone first", true);
+  openModal(`
+    <div class="modal">
+      <div class="modal-head"><div style="flex:1">
+        <h2>Share this family</h2>
+        <p>One link carries the whole tree. Anyone who opens it gets their own copy to explore and add to.</p>
+      </div>
+      <button class="btn icon ghost" data-close aria-label="Close">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <div class="fgrid two">
+          <label class="f"><span>Opens in</span><select id="shView">
+            ${Object.keys(VIEWS).map(k => `<option value="${k}"${ui.view===k?" selected":""}>${VIEW_NAME[k]}</option>`).join("")}
+          </select></label>
+          <label class="f"><span>Photos</span><select id="shPhoto">
+            <option value="0">Leave out — much shorter link</option>
+            <option value="1">Include</option>
+          </select></label>
+        </div>
+
+        <label class="f" style="margin-top:12px"><span>Link</span>
+          <input id="shURL" readonly style="font-family:var(--f-mono);font-size:11px"></label>
+        <div style="display:flex;gap:7px;margin-top:9px;flex-wrap:wrap;align-items:center">
+          <button class="btn sm primary" id="shCopy">Copy link</button>
+          <button class="btn sm" id="shQR">Save QR image</button>
+          <span class="mono" id="shSize" style="font-size:10.5px;color:var(--ink-3)"></span>
+        </div>
+
+        <div id="shQRBox" style="display:flex;justify-content:center;padding:16px 0 4px"></div>
+
+        <div class="notice" style="background:var(--accent-tint);border-color:var(--accent-ring);color:var(--accent-2)">
+          <b>How this works.</b> There is no server, so nobody edits the same copy.
+          Everyone gets their own. When a relative adds people, ask them to send their
+          link back — <b>File ▸ Merge</b> folds their additions into yours without
+          duplicating anyone.
+        </div>
+      </div>
+      <div class="modal-foot"><span class="spring"></span><button class="btn" data-close>Done</button></div>
+    </div>`);
+
+  let url = "";
+  async function build(){
+    const photos = $("#shPhoto").value === "1";
+    url = await shareURL({photos, view:$("#shView").value});
+    $("#shURL").value = url;
+    const kb = (url.length / 1024).toFixed(1);
+    const long = url.length > 8000;
+    $("#shSize").innerHTML = kb + " kB" + (long
+      ? ` · <span style="color:var(--danger)">very long — some apps will cut it. Send a family file instead.</span>`
+      : "");
+    const q = qrShape(url, 3);
+    $("#shQRBox").innerHTML = q
+      ? `<div style="text-align:center">
+           <svg width="190" height="190" viewBox="0 0 ${q.size} ${q.size}" style="background:#fff;padding:6px;border-radius:8px">
+             <path d="${q.d}" fill="#141C22"/></svg>
+           <div class="mono" style="font-size:10px;color:var(--ink-3);margin-top:7px">
+             ${q.size > 300 ? "dense — print it large, or share the link by message" : "scan to open the tree"}</div>
+         </div>`
+      : `<div class="mono" style="font-size:10.5px;color:var(--ink-3);text-align:center;line-height:1.7">
+           QR needs the code library, which loads from the internet.<br>Copy the link instead.</div>`;
+  }
+  $("#shView").addEventListener("change", build);
+  $("#shPhoto").addEventListener("change", build);
+  $("#shCopy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(url); toast("Link copied"); }
+    catch(e){ $("#shURL").select(); toast("Press Ctrl+C to copy", true); }
+  });
+  $("#shQR").addEventListener("click", async () => {
+    const q = qrShape(url, 8);
+    if(!q) return toast("QR code unavailable offline", true);
+    const cv = document.createElement("canvas");
+    const pad = 32;
+    cv.width = cv.height = q.size + pad * 2;
+    const x = cv.getContext("2d");
+    x.fillStyle = "#fff"; x.fillRect(0, 0, cv.width, cv.height);
+    x.fillStyle = "#141C22"; x.translate(pad, pad); x.fill(new Path2D(q.d));
+    cv.toBlob(async b => {
+      if(b && await offer(slug() + "-qr.png", b, "image/png")) toast("QR saved");
+    }, "image/png");
+  });
+  build();
+}
+
+/** Fold another copy of the family into this one, matching on name + birth year. */
+function mergeDoc(inc){
+  const keyOf = p => (fullName(p) + "|" + yearOf(p.birth)).toLowerCase();
+  const mine = {};
+  for(const id in S.people) mine[keyOf(S.people[id])] = id;
+  const map = {};
+  let added = 0, matched = 0, filled = 0;
+  for(const id in inc.people){
+    const p = inc.people[id], k = keyOf(p);
+    if(mine[k]){
+      map[id] = mine[k];
+      matched++;
+      const t = S.people[mine[k]];
+      for(const f of ["maiden","sex","death","place","occupation","notes","photo"])
+        if(!t[f] && p[f]){ t[f] = p[f]; filled++; }
+    } else {
+      const copy = Object.assign({}, p);
+      delete copy.id;
+      map[id] = addPerson(copy);
+      added++;
+    }
+  }
+  let links = 0;
+  for(const uid in inc.unions){
+    const u = inc.unions[uid];
+    const a = u.a ? map[u.a] : null, b = u.b ? map[u.b] : null;
+    if(!a && !b) continue;
+    let tid = (a && b) ? unionBetween(a, b, false) : null;
+    if(!tid){
+      tid = addUnion(a, b, {status:u.status || "married", date:u.date || "",
+                            place:u.place || "", divorced:!!u.divorced});
+      links++;
+    }
+    const t = U(tid);
+    for(const k of (u.children || [])){
+      const lk = map[k];
+      if(lk && !t.children.includes(lk) && !parentUnion(lk, false)){ t.children.push(lk); links++; }
+    }
+  }
+  return {added, matched, filled, links};
+}
+function mergeReport(r){
+  const bits = [];
+  bits.push(r.added ? r.added + (r.added === 1 ? " person added" : " people added") : "nobody new");
+  if(r.matched) bits.push(r.matched + " already here");
+  if(r.filled)  bits.push(r.filled + " blank details filled in");
+  if(r.links)   bits.push(r.links + " links joined up");
+  return bits.join(" · ");
+}
+function importDoc(d, mode){
+  snapshot();
+  if(mode === "merge"){
+    const r = mergeDoc(normalise(d));
+    save(); render();
+    toast(mergeReport(r));
+  } else {
+    S = normalise(d);
+    ui.isSample = false; ui.sel = null; ui.focus = null;
+    save(); render(); fitView();
+    toast("Opened " + Object.keys(S.people).length + " people");
+  }
+}
+
+/** A link was opened with a family in it. */
+function offerIncoming(d){
+  const n = Object.keys(d.people || {}).length;
+  const mine = Object.keys(S.people).length;
+  const title = (d.meta && d.meta.title) || "A shared family";
+  if(!mine || ui.isSample){ importDoc(d, "replace"); return; }
+  openModal(`
+    <div class="modal" style="width:min(100%,470px)">
+      <div class="modal-head"><div><h2>${esc(title)}</h2>
+        <p>Someone shared a tree of <b>${n}</b> people. You already have <b>${mine}</b> here.</p></div></div>
+      <div class="modal-body"><div class="rel">
+        <button class="rel-item" style="width:100%;text-align:left" data-mode="merge">
+          <span class="txt"><span class="nm">Merge into mine</span>
+          <span class="meta">adds anyone new, fills in blanks, keeps what you have</span></span></button>
+        <button class="rel-item" style="width:100%;text-align:left" data-mode="replace">
+          <span class="txt"><span class="nm">Open theirs instead</span>
+          <span class="meta">replaces what is on screen — save yours first if you need it</span></span></button>
+      </div></div>
+      <div class="modal-foot"><span class="spring"></span>
+        <button class="btn" data-close>Keep mine</button></div>
+    </div>`);
+  $("#modalMount").addEventListener("click", e => {
+    const b = e.target.closest("[data-mode]"); if(!b) return;
+    closeModal(); importDoc(d, b.dataset.mode);
   });
 }
 
@@ -3069,12 +3650,12 @@ function setView(v){
   if(!VIEWS[v]) v = "chart";
   ui.view = v;
   for(const k in VIEWS) $("#" + VIEWS[k]).setAttribute("aria-pressed", k === v);
-  /* card detail and generation bands only mean anything on the chart */
-  const chart = v === "chart";
-  $("#tPhoto").disabled = !chart;
-  $("#tGens").disabled  = !chart;
-  $("#tPhoto").style.opacity = $("#tGens").style.opacity = chart ? "" : ".35";
-  $(".legend").style.display = chart ? "" : "none";
+  /* the chart and the tree both use card detail and generation guides */
+  const styled = v === "chart" || v === "tree";
+  $("#tPhoto").disabled = !styled;
+  $("#tGens").disabled  = !styled;
+  $("#tPhoto").style.opacity = $("#tGens").style.opacity = styled ? "" : ".35";
+  $(".legend").style.display = v === "chart" ? "" : "none";
   save();
 }
 function setMode(m){
@@ -3123,6 +3704,7 @@ function guessSurname(){
   for(const id in S.people){ const l = (P(id).last||"").trim(); if(l) counts[l] = (counts[l]||0)+1; }
   return Object.keys(counts).sort((a,b) => counts[b]-counts[a])[0] || "";
 }
+$("#btnShare").addEventListener("click", shareDialog);
 $("#btnFile").addEventListener("click", fileDialog);
 $("#btnPrint").addEventListener("click", printDialog);
 $("#ihClose").addEventListener("click", () => { ui.sel = null; renderRail(); renderInspector(); drawChart(); });
@@ -3332,6 +3914,20 @@ function loadSample(){
      file:// copy falls back to an ordinary download link */
   if(window.claude && window.claude.use){
     window.claude.use("downloads").then(d => { DL = d; }).catch(() => {});
+  }
+
+  /* #f= carries a whole family; the fragment never leaves the browser */
+  const frag = location.hash.match(/^#f=(.+)$/);
+  if(frag){
+    try { history.replaceState(null, "", location.pathname + location.search); } catch(e){}
+    unpack(frag[1])
+      .then(txt => {
+        const j = JSON.parse(txt);
+        const d = j && j.data ? j.data : j;
+        if(!d || !d.people) throw new Error("empty");
+        offerIncoming(d);
+      })
+      .catch(() => toast("That shared link could not be read", true));
   }
 })();
 </script>

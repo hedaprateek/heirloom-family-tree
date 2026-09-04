@@ -32,7 +32,7 @@ Print. A link can also open straight into one: `?view=tree`.
 | View | What it's for |
 |---|---|
 | **Chart** | The full record — photos, dates, places, occupations, every link. |
-| **Tree** | Names on branches that thicken in proportion to how many descendants each line carries. Trunk, roots and new growth at the tips. |
+| **Tree** | Names on branches that thicken in proportion to how many descendants each line carries. Trunk, roots and foliage at the tips. The card-detail button adds years, then photos. |
 | **Fan** | Generations as concentric rings, each slice sized by how much of the family sits behind that person. The best poster for a deep family. |
 | **Timeline** | One bar per life across the years, grouped by generation, with brass ties marking the year two people married. Shows at a glance who overlapped whom. |
 | **Register** | A numbered list to hand round the table, using d'Aboville numbering — `1.2.1` places anyone exactly without needing the chart. |
@@ -54,27 +54,50 @@ Roman numerals down the left gutter mark each generation.
 ## Printing
 
 The print dialog shows a live sheet preview with the page grid drawn over the
-real chart.
+real chart. Start from a preset — A4 handout, A3 chart, A2 poster, A1 wall,
+or a multi-sheet mural — then adjust.
 
+**Size**
 - **One sheet** — A4 through A0, shrink to fit. It warns you when names get too
   small to read.
-- **Poster** — tiles across sheets at a print size you choose, with glue
-  overlap, corner marks and row/column labels. It tells you the assembled size
-  ("6 sheets — 3 across × 2 down, 126 × 84 cm").
+- **N sheets across** — say how wide you want the finished poster and it works
+  out the scale and the grid.
+- **Exact print size** — set the percentage yourself.
 
-For a true vector PDF, press Print and choose *Save as PDF*. In the print dialog
-set margins to **None** and turn **headers and footers off**.
+Tiled posters get glue overlap, corner trim marks, row/column labels, and an
+**assembly sheet** printed first showing the numbered grid and the finished
+size ("6 sheets — 3 across × 2 down, 126 × 84 cm").
 
-Also exports **PNG** (rendered through Canvas so the fonts survive), **SVG**
-(vector, scales to any size) and the raw **family data** as JSON.
+**On the sheet** — optional frame rule, symbol key, date printed, people count,
+and a **QR code linking to the shared tree**, so guests can scan the poster and
+open the family on their phone.
+
+**Ink and paper** — full colour or black &amp; white (the whole palette collapses
+to greys for cheap printing), on white, warm cream, or transparent for export.
+
+**Files** — vector **PDF** via Print ▸ *Save as PDF* (set margins to **None**
+and turn **headers and footers off**); **PNG** at 150/300/600 dpi sized to the
+paper you chose; **SVG**; **CSV** of everyone for a spreadsheet; and the raw
+**family file** as JSON.
+
+## Sharing it with the family
+
+**Share** puts the whole tree into one link — the data rides in the URL's
+fragment, so it never reaches any server. No account, no backend, nothing to
+run. Send it by message, or print its QR code on the poster.
+
+Anyone who opens the link gets **their own copy** to explore and add to. There
+is no shared server, so nobody is editing the same thing. When a relative has
+added people, ask for their link or file back and use **File ▸ Merge** — it
+matches on name and birth year, adds anyone new, fills in blanks you left, and
+does not duplicate people you both have.
 
 ## Your data
 
 Everything lives in your own browser as you type. Nothing is uploaded anywhere.
 
-Use **File → Save family file** to keep a copy, move it to another computer, or
-send it round the family. Clipboard copy/paste works as a fallback where
-downloads are blocked.
+Use **File ▸ Save family file** to keep a copy or move it to another computer.
+Clipboard copy/paste works as a fallback where downloads are blocked.
 
 ## Keyboard
 
@@ -94,6 +117,10 @@ around that person.
 ## Running it
 
 Download `index.html` and open it. That's the whole app.
+
+The only thing it fetches from the internet is the typefaces and a small QR
+code library. Both are optional — offline you get system fonts and no QR, and
+everything else works exactly the same.
 
 ---
 
