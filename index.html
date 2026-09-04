@@ -107,8 +107,19 @@ button{cursor:pointer;background:none;border:0;padding:0}
 .seg{display:flex;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:2px;gap:2px}
 .seg button{
   padding:5px 11px;border-radius:6px;font-size:12.5px;font-weight:500;color:var(--ink-2);
-  white-space:nowrap;
+  white-space:nowrap;display:inline-flex;align-items:center;gap:6px;
 }
+.seg button svg{flex:0 0 auto;opacity:.85}
+.seg button[aria-pressed="true"] svg{opacity:1}
+@media (max-width:1320px){.seg .lab{display:none}.seg button{padding:6px 9px}}
+.selwrap{position:relative;display:inline-flex;flex:0 0 auto}
+.selwrap svg{position:absolute;right:8px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--ink-3)}
+.selwrap select{
+  appearance:none;-webkit-appearance:none;
+  padding:7px 26px 7px 11px;border-radius:8px;border:1px solid var(--line);
+  background:var(--panel-2);font-size:12.5px;font-weight:500;color:var(--ink);
+}
+.selwrap select:hover{background:var(--panel-3);border-color:var(--line-2)}
 .seg button[aria-pressed="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 2px var(--shade);font-weight:600}
 .seg button:hover:not([aria-pressed="true"]){color:var(--ink)}
 
@@ -406,6 +417,10 @@ kbd{
 #chart .genlab{fill:var(--ink-3);font:400 10px var(--f-mono);letter-spacing:.18em}
 #chart .node{cursor:pointer}
 #chart .node:hover .card-bg{stroke:var(--accent-ring)}
+/* the display-list views hit-test through invisible shapes laid over the drawing */
+#chart .hit{fill:transparent}
+#chart .hit:hover{fill:var(--accent);fill-opacity:.12}
+#chart .selring{fill:none;stroke:var(--accent);stroke-width:2.5;pointer-events:none}
 #chart .title-main{fill:var(--ink);font:600 34px var(--f-disp)}
 #chart .title-sub{fill:var(--ink-2);font:400 14px var(--f-ui)}
 #chart .title-rule{stroke:var(--brass);stroke-width:1.5}
@@ -523,11 +538,34 @@ kbd{
 
     <div class="bar-sep hide-narrow"></div>
 
-    <div class="seg" role="group" aria-label="Chart view">
-      <button id="mDesc" aria-pressed="true">Descendants</button>
-      <button id="mAnc" aria-pressed="false">Ancestors</button>
-      <button id="mAll" aria-pressed="false">Everyone</button>
+    <div class="seg" role="group" aria-label="View">
+      <button id="vChart" aria-pressed="true" title="Register chart — the full record">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.6" y="1.6" width="4.8" height="3.2" rx=".7"/><rect x="1.4" y="11.2" width="4.4" height="3.2" rx=".7"/><rect x="10.2" y="11.2" width="4.4" height="3.2" rx=".7"/><path d="M8 4.8v3.4M3.6 11.2V8.2h8.8v3" stroke-linecap="round"/></svg>
+        <span class="lab">Chart</span></button>
+      <button id="vTree" aria-pressed="false" title="Tree — names on branches">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 14.5V7M8 7C8 7 5.2 5.9 4 3.4M8 7c0-.1 2.6-1.1 3.9-3.7"/><circle cx="3.4" cy="2.4" r="1.5"/><circle cx="12.5" cy="2.4" r="1.5"/><circle cx="8" cy="6.4" r="1.3"/></svg>
+        <span class="lab">Tree</span></button>
+      <button id="vFan" aria-pressed="false" title="Fan — a radial chart">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 12.5a6 6 0 0 1 12 0" stroke-linecap="round"/><path d="M5.3 12.5a2.7 2.7 0 0 1 5.4 0" stroke-linecap="round"/><path d="M8 12.5V9.8M5.2 8.1l1.9 1.9M10.8 8.1 8.9 10" stroke-linecap="round"/></svg>
+        <span class="lab">Fan</span></button>
+      <button id="vTime" aria-pressed="false" title="Timeline — lifespans across the years">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 3.4h9M2 8h12M2 12.6h6.5"/><circle cx="12.6" cy="3.4" r="1.1"/><circle cx="10.4" cy="12.6" r="1.1"/></svg>
+        <span class="lab">Timeline</span></button>
+      <button id="vList" aria-pressed="false" title="Register — a numbered list to hand round">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M6 3.6h8M6 8h8M6 12.4h8M2.3 3.6h.9M2.3 8h.9M2.3 12.4h.9"/></svg>
+        <span class="lab">Register</span></button>
     </div>
+
+    <div class="bar-sep hide-narrow"></div>
+
+    <span class="selwrap hide-narrow">
+      <select id="scope" aria-label="Who to include">
+        <option value="desc">Descendants of…</option>
+        <option value="anc">Ancestors of…</option>
+        <option value="all">Everyone</option>
+      </select>
+      <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 6.5 8 10.5l4-4"/></svg>
+    </span>
     <button class="btn hide-narrow" id="btnFocus" title="Choose whose tree to draw">
       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="5.5" r="2.8"/><path d="M2.8 13.5a5.2 5.2 0 0 1 10.4 0" stroke-linecap="round"/></svg>
       <span id="focusName">—</span>
@@ -669,17 +707,19 @@ const ANC_LABELS = ["SUBJECT","PARENTS","GRANDPARENTS","GREAT-GRANDPARENTS",
 const PAL = {
   light:{paper:"#FFFFFF",card:"#FFFFFF",card2:"#F8F8F2",ink:"#141C22",ink2:"#4B5A62",ink3:"#79868C",
          line:"#D3D3C6",line2:"#B4B4A4",accent:"#3D6A54",ring:"#8FB6A2",brass:"#96671F",brassT:"#F0E5CF",
-         monoL:85,monoS:26,monoTL:30,monoTS:32},
+         bark:"#8A7350",monoL:85,monoS:26,monoTL:30,monoTS:32},
   dark :{paper:"#121618",card:"#222A2D",card2:"#1C2427",ink:"#E6EAE5",ink2:"#A2AFAC",ink3:"#73807E",
          line:"#323C3E",line2:"#455052",accent:"#7FBF9C",ring:"#4E7A64",brass:"#D2A25E",brassT:"#2E2617",
-         monoL:30,monoS:22,monoTL:80,monoTS:38}
+         bark:"#6E5C42",monoL:30,monoS:22,monoTL:80,monoTS:38}
 };
+/* type families, shared by the SVG serialiser and the canvas painter */
+const FAM = {ui:'"Public Sans",sans-serif', mono:'"IBM Plex Mono",monospace', disp:'"Fraunces",Georgia,serif'};
 
 /* ── state ─────────────────────────────────────────────── */
 const KEY = "heirloom.v1";
 let S = blankDoc();
 let ui = {
-  mode:"desc", focus:null, sel:null, style:"standard", gens:true,
+  view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
   z:1, tx:0, ty:0, query:"", isSample:false, dirty:false
 };
 let LAY = null;                 // last computed layout
@@ -820,9 +860,9 @@ function parentUnion(id, create){
    Each block reports its width and the x of its head person,
    which is what the parent's descent line drops onto.
    ═══════════════════════════════════════════════════════════ */
-function layout(){
+function layout(cardOverride){
   const idx = buildIndex();
-  const C   = CARD[ui.style];
+  const C   = cardOverride || CARD[ui.style];
   const ctx = {idx, C, placed:new Set(), usedU:new Set(), nodes:[], links:[], bands:[], cross:[]};
   const ids = Object.keys(S.people);
   if(!ids.length) return null;
@@ -1013,7 +1053,7 @@ function layoutAncestors(ctx, rootId){
     }
     const busY = y - GEN_V * 0.55;
     const anchors = b.kids.map(k => ox + k.offset + k.anchor);
-    const cx = x + CARD[ui.style].w/2;
+    const cx = x + C.w/2;
     const lo = Math.min(cx, ...anchors), hi = Math.max(cx, ...anchors);
     ctx.links.push({d:`M${r1(cx)} ${r1(y)} V${r1(busY)}`});
     ctx.links.push({d:`M${r1(lo)} ${r1(busY)} H${r1(hi)}`});
@@ -1031,7 +1071,7 @@ function r1(n){ return Math.round(n * 10) / 10; }
 
 /** Turn raw nodes/links into a finished model with bounds and generation bands. */
 function finish(extra, ctx, ancestors){
-  const C = CARD[ui.style];
+  const C = ctx.C;
   if(!ctx.nodes.length) return null;
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for(const n of ctx.nodes){
@@ -1074,7 +1114,9 @@ function finish(extra, ctx, ancestors){
   });
 
   const x0 = minX - PAD - GUTTER, y0 = minY - PAD;
+  ctx.nodes.forEach(n => { n.w = C.w; n.h = C.h; });
   return {
+    kind:"chart",
     nodes:ctx.nodes, links:ctx.links, bands:ctx.bands, cross:crossPaths, rows,
     C, ancestors,
     minX, maxX, minY, maxY,
@@ -1176,29 +1218,40 @@ function chartSVG(model, opts){
   model.bands.forEach(b => { out += bandSVG(b); });
   model.nodes.forEach(n => { out += cardSVG(n, model, opts); });
 
-  if(opts.title && (opts.title.main || opts.title.sub)){
-    const tx = model.box.x + 4, ty = model.box.y - 6;
-    out = `<g transform="translate(0,${r1(72)})">` + out + `</g>`;
-    let head = "";
-    if(opts.title.main) head += `<text class="title-main" x="${r1(tx)}" y="${r1(model.box.y + 34)}">${esc(opts.title.main)}</text>`;
-    if(opts.title.sub)  head += `<text class="title-sub" x="${r1(tx)}" y="${r1(model.box.y + 56)}">${esc(opts.title.sub)}</text>`;
-    head += `<path class="title-rule" d="M${r1(tx)} ${r1(model.box.y + 68)} H${r1(model.box.x + model.box.w - 4)}"/>`;
-    out = head + out;
-  }
   return out;
+}
+/** Every view gets its heading the same way: draw it, then push the art down. */
+function withTitle(inner, box, title, pal){
+  if(!title || !(title.main || title.sub)) return inner;
+  const tx = box.x + 4;
+  let head = "";
+  if(title.main) head += `<text x="${r1(tx)}" y="${r1(box.y + 34)}" fill="${pal.ink}" `
+    + `font-family='${FAM.disp}' font-size="34" font-weight="600">${esc(title.main)}</text>`;
+  if(title.sub)  head += `<text x="${r1(tx)}" y="${r1(box.y + 56)}" fill="${pal.ink2}" `
+    + `font-family='${FAM.ui}' font-size="14">${esc(title.sub)}</text>`;
+  head += `<path d="M${r1(tx)} ${r1(box.y + 68)} H${r1(box.x + box.w - 4)}" stroke="${pal.brass}" stroke-width="1.5" fill="none"/>`;
+  return head + `<g transform="translate(0,72)">` + inner + `</g>`;
 }
 function boxWithTitle(model, hasTitle){
   const b = model.box;
   return hasTitle ? {x:b.x, y:b.y, w:b.w, h:b.h + 72} : b;
 }
+/** Build the SVG innards for whichever view is active. */
+function viewSVG(model, opts){
+  opts = opts || {};
+  const pal = opts.pal || activePal();
+  const inner = model.kind === "chart" ? chartSVG(model, opts) : dlToSVG(model.dl);
+  return withTitle(inner, model.box, opts.title, pal);
+}
 
 function drawChart(){
   const svg = $("#chart");
-  LAY = layout();
+  LAY = makeModel(activePal());
   const empty = !LAY;
   $("#stageEmpty").hidden = !empty;
   if(empty){ svg.innerHTML = ""; return; }
-  svg.innerHTML = `<g id="vp">${chartSVG(LAY, {selectable:true, ns:"s"})}</g>`;
+  svg.innerHTML = `<g id="vp">${viewSVG(LAY, {selectable:true, ns:"s"})}`
+                + `${selRing(LAY)}${hitsSVG(LAY)}</g>`;
   applyTransform();
 }
 function applyTransform(){
@@ -1221,8 +1274,8 @@ function centerOn(pid){
   const n = LAY.nodes.find(n => n.pid === pid); if(!n) return;
   const st = $("#stage").getBoundingClientRect();
   ui.z = Math.max(ui.z, 0.7);
-  ui.tx = st.width/2  - (n.x + LAY.C.w/2) * ui.z;
-  ui.ty = st.height/2 - (n.y + LAY.C.h/2) * ui.z;
+  ui.tx = st.width/2  - (n.x + (n.w || 0)/2) * ui.z;
+  ui.ty = st.height/2 - (n.y + (n.h || 0)/2) * ui.z;
   applyTransform();
 }
 
@@ -1378,6 +1431,591 @@ function warmPhotos(){
       const img = new Image(); img.src = p.photo; photoCache[id] = img;
     }
   }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DISPLAY LIST
+   The register chart above draws through CSS classes, because
+   it wants the live theme. The four other views emit a flat
+   list of primitives instead, which both an SVG serialiser and
+   a canvas painter consume — so each new view gets print, PDF,
+   PNG and SVG export without a renderer of its own.
+   ═══════════════════════════════════════════════════════════ */
+function activePal(){
+  const t = document.documentElement.getAttribute("data-theme");
+  const dark = t ? t === "dark" : window.matchMedia("(prefers-color-scheme:dark)").matches;
+  return dark ? PAL.dark : PAL.light;
+}
+function mix(a, b, t){
+  const rgb = s => {
+    s = s.replace("#", "");
+    if(s.length === 3) s = s.split("").map(c => c + c).join("");
+    return [parseInt(s.slice(0,2),16), parseInt(s.slice(2,4),16), parseInt(s.slice(4,6),16)];
+  };
+  const A = rgb(a), B = rgb(b), k = clamp(t, 0, 1);
+  return "#" + [0,1,2].map(i =>
+    Math.round(A[i] + (B[i] - A[i]) * k).toString(16).padStart(2, "0")).join("");
+}
+
+/* text measured against the page's own loaded faces, not guessed */
+let _mctx = null;
+function fontStr(size, fam, weight, italic){
+  return `${italic ? "italic " : ""}${weight || 400} ${size}px ${FAM[fam || "ui"]}`;
+}
+function measure(s, size, fam, weight, italic){
+  if(!_mctx) _mctx = document.createElement("canvas").getContext("2d");
+  _mctx.font = fontStr(size, fam, weight, italic);
+  return _mctx.measureText(String(s == null ? "" : s)).width;
+}
+function fitTo(s, max, size, fam, weight){
+  s = String(s == null ? "" : s);
+  if(!s || measure(s, size, fam, weight) <= max) return s;
+  let lo = 0, hi = s.length;
+  while(lo < hi){
+    const mid = (lo + hi + 1) >> 1;
+    if(measure(s.slice(0, mid) + "…", size, fam, weight) <= max) lo = mid; else hi = mid - 1;
+  }
+  return lo <= 0 ? "" : s.slice(0, lo).trimEnd() + "…";
+}
+
+function dlToSVG(dl){
+  let s = "";
+  for(const o of dl){
+    const op   = (o.alpha != null && o.alpha !== 1) ? ` opacity="${o.alpha}"` : "";
+    const st   = o.stroke ? ` stroke="${o.stroke}" stroke-width="${o.sw || 1}"` : "";
+    const dash = o.dash ? ` stroke-dasharray="${o.dash}"` : "";
+    const cap  = o.cap ? ` stroke-linecap="${o.cap}"` : "";
+    const join = o.join ? ` stroke-linejoin="${o.join}"` : "";
+    const fill = ` fill="${o.fill || "none"}"`;
+    const rot  = o.rot ? ` transform="rotate(${r1(o.rot)} ${r1(o.rx || o.x || 0)} ${r1(o.ry || o.y || 0)})"` : "";
+    if(o.t === "rect")
+      s += `<rect x="${r1(o.x)}" y="${r1(o.y)}" width="${r1(o.w)}" height="${r1(o.h)}" rx="${o.r || 0}"${fill}${st}${dash}${rot}${op}/>`;
+    else if(o.t === "circle")
+      s += `<circle cx="${r1(o.cx)}" cy="${r1(o.cy)}" r="${r1(o.r)}"${fill}${st}${op}/>`;
+    else if(o.t === "path")
+      s += `<path d="${o.d}"${fill}${st}${dash}${cap}${join}${rot}${op}/>`;
+    else if(o.t === "text"){
+      const an = o.anchor && o.anchor !== "start" ? ` text-anchor="${o.anchor}"` : "";
+      const ls = o.ls ? ` letter-spacing="${o.ls}"` : "";
+      const it = o.italic ? ` font-style="italic"` : "";
+      s += `<text x="${r1(o.x)}" y="${r1(o.y)}" fill="${o.fill}" font-family='${FAM[o.fam || "ui"]}'`
+         + ` font-size="${o.size}" font-weight="${o.weight || 400}"${an}${ls}${it}${rot}${op}>${esc(o.s)}</text>`;
+    }
+  }
+  return s;
+}
+function dlPaint(x, dl){
+  for(const o of dl){
+    x.save();
+    if(o.alpha != null) x.globalAlpha = o.alpha;
+    if(o.dash) x.setLineDash(String(o.dash).split(/[\s,]+/).map(Number));
+    if(o.cap)  x.lineCap = o.cap;
+    if(o.join) x.lineJoin = o.join;
+    if(o.rot){
+      const rx = o.rx != null ? o.rx : (o.x || 0), ry = o.ry != null ? o.ry : (o.y || 0);
+      x.translate(rx, ry); x.rotate(o.rot * Math.PI / 180); x.translate(-rx, -ry);
+    }
+    if(o.t === "rect"){
+      roundRect(x, o.x, o.y, o.w, o.h, o.r || 0);
+      if(o.fill){ x.fillStyle = o.fill; x.fill(); }
+      if(o.stroke){ x.strokeStyle = o.stroke; x.lineWidth = o.sw || 1; x.stroke(); }
+    } else if(o.t === "circle"){
+      x.beginPath(); x.arc(o.cx, o.cy, Math.max(0, o.r), 0, Math.PI * 2);
+      if(o.fill){ x.fillStyle = o.fill; x.fill(); }
+      if(o.stroke){ x.strokeStyle = o.stroke; x.lineWidth = o.sw || 1; x.stroke(); }
+    } else if(o.t === "path"){
+      const p = new Path2D(o.d);
+      if(o.fill){ x.fillStyle = o.fill; x.fill(p); }
+      if(o.stroke){ x.strokeStyle = o.stroke; x.lineWidth = o.sw || 1; x.stroke(p); }
+    } else if(o.t === "text"){
+      x.fillStyle = o.fill;
+      x.font = fontStr(o.size, o.fam, o.weight, o.italic);
+      x.textAlign = o.anchor === "middle" ? "center" : (o.anchor === "end" ? "right" : "left");
+      try { x.letterSpacing = o.ls || "0px"; } catch(e){}
+      x.fillText(o.s, o.x, o.y);
+    }
+    x.restore();
+  }
+}
+function renderCanvasDL(model, scale, palName, title){
+  const pal = PAL[palName] || PAL.light;
+  const titleH = title && (title.main || title.sub) ? 72 : 0;
+  const b = model.box;
+  const cv = document.createElement("canvas");
+  cv.width  = Math.max(1, Math.round(b.w * scale));
+  cv.height = Math.max(1, Math.round((b.h + titleH) * scale));
+  const x = cv.getContext("2d");
+  x.fillStyle = pal.paper; x.fillRect(0, 0, cv.width, cv.height);
+  x.scale(scale, scale);
+  x.translate(-b.x, -b.y);
+  if(titleH){
+    x.fillStyle = pal.ink; x.font = '600 34px ' + FAM.disp;
+    if(title.main) x.fillText(title.main, b.x + 4, b.y + 34);
+    if(title.sub){ x.fillStyle = pal.ink2; x.font = '400 14px ' + FAM.ui; x.fillText(title.sub, b.x + 4, b.y + 56); }
+    x.strokeStyle = pal.brass; x.lineWidth = 1.5;
+    x.beginPath(); x.moveTo(b.x + 4, b.y + 68); x.lineTo(b.x + b.w - 4, b.y + 68); x.stroke();
+    x.translate(0, 72);
+  }
+  dlPaint(x, model.dl);
+  return cv;
+}
+
+/* small shapes the views share */
+function taper(x1, y1, x2, y2, w1, w2){
+  const m1 = y1 + (y2 - y1) * 0.42, m2 = y1 + (y2 - y1) * 0.74;
+  return `M${r1(x1 - w1/2)} ${r1(y1)} C${r1(x1 - w1/2)} ${r1(m1)} ${r1(x2 - w2/2)} ${r1(m2)} ${r1(x2 - w2/2)} ${r1(y2)} `
+       + `L${r1(x2 + w2/2)} ${r1(y2)} C${r1(x2 + w2/2)} ${r1(m2)} ${r1(x1 + w1/2)} ${r1(m1)} ${r1(x1 + w1/2)} ${r1(y1)} Z`;
+}
+function almond(cx, cy, L, W){
+  return `M${r1(cx)} ${r1(cy - L/2)} C${r1(cx + W/2)} ${r1(cy - L/6)} ${r1(cx + W/2)} ${r1(cy + L/6)} ${r1(cx)} ${r1(cy + L/2)} `
+       + `C${r1(cx - W/2)} ${r1(cy + L/6)} ${r1(cx - W/2)} ${r1(cy - L/6)} ${r1(cx)} ${r1(cy - L/2)} Z`;
+}
+function sector(cx, cy, ri, ro, a0, a1){
+  const pt = (r, a) => [cx + r * Math.cos(a * Math.PI/180), cy + r * Math.sin(a * Math.PI/180)];
+  const big = (a1 - a0) > 180 ? 1 : 0;
+  const [x1,y1] = pt(ri, a0), [x2,y2] = pt(ri, a1), [x3,y3] = pt(ro, a1), [x4,y4] = pt(ro, a0);
+  return `M${r1(x1)} ${r1(y1)} A${r1(ri)} ${r1(ri)} 0 ${big} 1 ${r1(x2)} ${r1(y2)} `
+       + `L${r1(x3)} ${r1(y3)} A${r1(ro)} ${r1(ro)} 0 ${big} 0 ${r1(x4)} ${r1(y4)} Z`;
+}
+const upsideDown = a => { const m = ((a % 360) + 360) % 360; return m > 90 && m < 270; };
+const byBirth = (a, b) => (parseInt(yearOf(P(a).birth)) || 9999) - (parseInt(yearOf(P(b).birth)) || 9999);
+
+/* ── TREE ──────────────────────────────────────────────────
+   The same layout engine, drawn as a thing that grew: the
+   founding couple at the root, branches thickening in
+   proportion to how many descendants they carry.
+   ──────────────────────────────────────────────────────── */
+const TREE_CARD = {w:172, h:32, photo:false};
+const TREE_ROW  = 152;
+
+function treeView(pal){
+  const base = layout(TREE_CARD);
+  if(!base) return null;
+  const idx = buildIndex(), C = TREE_CARD;
+  const pos = {}; base.nodes.forEach(n => { pos[n.pid] = n; });
+  const maxD = base.nodes.reduce((m, n) => Math.max(m, n.depth), 0);
+  const rowY = d => (maxD - d) * TREE_ROW;
+
+  const mate = {};
+  for(const b of base.bands){
+    const u = U(b.uid);
+    if(!u || !u.a || !u.b || !pos[u.a] || !pos[u.b]) continue;
+    (mate[u.a] = mate[u.a] || []).push({pid:u.b, u});
+    (mate[u.b] = mate[u.b] || []).push({pid:u.a, u});
+  }
+
+  /* one pill per person and whoever they married — the hub of a
+     remarriage claims its cell first, so nobody is drawn twice */
+  const cellOf = {}, cells = [];
+  const order = base.nodes.slice().sort((a, b) =>
+    ((mate[b.pid] || []).length - (mate[a.pid] || []).length) || (a.x - b.x));
+  for(const n of order){
+    if(cellOf[n.pid]) continue;
+    const members = [n.pid];
+    for(const m of (mate[n.pid] || [])) if(!cellOf[m.pid]) members.push(m.pid);
+    members.sort((p, q) => pos[p].x - pos[q].x);
+    const cell = {members, depth:n.depth, y:rowY(n.depth), h:30,
+                  x: members.reduce((s, p) => s + pos[p].x + C.w/2, 0) / members.length};
+    members.forEach(p => { cellOf[p] = cell; });
+    cells.push(cell);
+  }
+
+  const NSZ = 13, SSZ = 12;
+  const runWidth = r => measure(r.s, r.sep ? SSZ : NSZ, "ui", r.sep ? 400 : 600);
+  for(const cell of cells){
+    const runs = [];
+    cell.members.forEach((pid, i) => {
+      if(i){
+        const prev = cell.members[i-1];
+        const rel = (mate[prev] || []).find(m => m.pid === pid);
+        const u = rel && rel.u;
+        runs.push({sep:true, s: u && u.divorced ? "⚮" : (u && u.status === "partners" ? "◇" : "⚭")});
+      }
+      runs.push({pid, s: fullName(P(pid))});
+    });
+    const total = rs => rs.reduce((t, r) => t + runWidth(r) + 9, 0) + 6;
+    if(total(runs) > 330)                       // trim to first names before it sprawls
+      runs.forEach((r, i) => { if(!r.sep && i > 0) r.s = P(r.pid).first || r.s; });
+    cell.runs = runs;
+    cell.w = Math.max(74, total(runs));
+    let rx = cell.x - cell.w/2 + 6;
+    for(const r of runs){ r.w = runWidth(r); r.x = rx; rx += r.w + 9; }
+  }
+
+  const dcount = {};
+  function desc(pid){
+    if(dcount[pid] != null) return dcount[pid];
+    dcount[pid] = 0;                               // also guards against a data loop
+    let n = 0;
+    for(const uid of idx[pid].unions)
+      for(const k of (U(uid).children || [])) if(S.people[k]) n += 1 + desc(k);
+    dcount[pid] = n;
+    return n;
+  }
+  const weight = c => clamp(3 + Math.sqrt(Math.max.apply(null, c.members.map(desc))) * 2.9, 3, 30);
+
+  const edges = [], hasKids = new Set();
+  for(const uid in S.unions){
+    const u = S.unions[uid];
+    const src = cellOf[u.a] || cellOf[u.b];
+    if(!src) continue;
+    for(const k of (u.children || [])){
+      const dst = cellOf[k];
+      if(dst && dst !== src && dst.depth > src.depth){ edges.push({src, dst}); hasKids.add(src); }
+    }
+  }
+
+  const dl = [], hits = [];
+  for(const c of cells.filter(c => c.depth === 0)){          // trunk, roots, ground
+    const w = weight(c) * 1.3, gy = c.y + TREE_ROW * 0.58;
+    dl.push({t:"path", d:taper(c.x, c.y + c.h/2 - 2, c.x, gy, w, w * 1.55), fill:pal.bark, alpha:.95});
+    for(const k of [-1, 1])
+      dl.push({t:"path", stroke:pal.bark, sw:Math.max(2, w * 0.34), cap:"round", alpha:.5,
+               d:`M${r1(c.x)} ${r1(gy - 7)} Q${r1(c.x + k * w * 1.7)} ${r1(gy + 7)} ${r1(c.x + k * (w * 2.7 + 24))} ${r1(gy + 16)}`});
+    dl.push({t:"path", stroke:pal.line2, sw:1.2, cap:"round", alpha:.55,
+             d:`M${r1(c.x - w * 4 - 30)} ${r1(gy + 18)} H${r1(c.x + w * 4 + 30)}`});
+  }
+  for(const e of edges){
+    const w = weight(e.dst);
+    dl.push({t:"path", fill:pal.bark, alpha:.9,
+             d:taper(e.src.x, e.src.y - e.src.h/2 + 2, e.dst.x, e.dst.y + e.dst.h/2 - 2, w * 1.15, w * 0.85)});
+  }
+  for(const c of cells){                                     // new growth at the tips
+    if(hasKids.has(c)) continue;
+    const ly = c.y - c.h/2 - 11;
+    dl.push({t:"path", d:almond(c.x - 10, ly, 21, 9), fill:pal.accent, alpha:.55, rot:-26, rx:c.x - 10, ry:ly});
+    dl.push({t:"path", d:almond(c.x + 10, ly, 18, 8), fill:pal.accent, alpha:.38, rot: 28, rx:c.x + 10, ry:ly});
+  }
+  for(const c of cells){
+    dl.push({t:"rect", x:c.x - c.w/2, y:c.y - c.h/2, w:c.w, h:c.h, r:15,
+             fill:pal.card, stroke:pal.line2, sw:1});
+    for(const r of c.runs){
+      dl.push({t:"text", x:r.x, y:c.y + 4.5, s:r.s, size:r.sep ? SSZ : NSZ,
+               weight:r.sep ? 400 : 600, fill:r.sep ? pal.brass : pal.ink});
+      if(!r.sep) hits.push({pid:r.pid, x:r.x - 4, y:c.y - c.h/2, w:r.w + 8, h:c.h, depth:c.depth});
+    }
+  }
+
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for(const c of cells){
+    x0 = Math.min(x0, c.x - c.w/2); x1 = Math.max(x1, c.x + c.w/2);
+    y0 = Math.min(y0, c.y - c.h/2 - 34); y1 = Math.max(y1, c.y + c.h/2);
+  }
+  y1 += TREE_ROW * 0.58 + 26;
+  return {kind:"tree", dl, hits, nodes:hits, rows:base.rows, ancestors:base.ancestors,
+          box:{x:x0 - PAD, y:y0 - PAD, w:(x1 - x0) + PAD*2, h:(y1 - y0) + PAD*2}};
+}
+
+/* ── FAN ───────────────────────────────────────────────────
+   Generations as concentric rings, each person's slice sized
+   by how much of the family sits behind them.
+   ──────────────────────────────────────────────────────── */
+function fanView(pal){
+  const idx = buildIndex();
+  const anc = ui.mode === "anc";
+  let rootId = ui.focus && P(ui.focus) ? ui.focus : null;
+  if(!rootId){
+    const ids = Object.keys(S.people);
+    if(!ids.length) return null;
+    rootId = anc ? ids.slice().sort((a,b) => byBirth(b, a))[0]
+                 : ids.filter(id => !idx[id].childOf).sort(byBirth)[0] || ids[0];
+  }
+  const MAXD = 7;
+  const seen = new Set();
+  function node(pid, d){
+    const n = {pid, d, kids:[], spouses:[]};
+    if(!seen.has(pid) && d < MAXD){
+      seen.add(pid);
+      if(anc){
+        n.kids = idx[pid].parents.map(q => node(q, d + 1));
+      } else {
+        for(const uid of idx[pid].unions){
+          const u = U(uid), sp = partnerOf(u, pid);
+          if(sp && S.people[sp]) n.spouses.push(sp);
+          for(const k of (u.children || []).slice().sort(byBirth))
+            if(S.people[k]) n.kids.push(node(k, d + 1));
+        }
+      }
+    }
+    n.leaves = n.kids.length ? n.kids.reduce((a, k) => a + k.leaves, 0) : 1;
+    return n;
+  }
+  const root = node(rootId, 0);
+
+  const R0 = 86, RW = 80;
+  /* descendants close to a near-full ring, leaving a hairline seam at the foot */
+  const SPAN = anc ? 180 : 356, A0 = anc ? 180 : -90 - SPAN/2;
+  (function assign(n, a0, a1){
+    n.a0 = a0; n.a1 = a1;
+    let a = a0;
+    for(const k of n.kids){ const w = (a1 - a0) * (k.leaves / n.leaves); assign(k, a, a + w); a += w; }
+  })(root, A0, A0 + SPAN);
+
+  const dl = [], hits = [];
+  let maxD = 0;
+  (function scan(n){ maxD = Math.max(maxD, n.d); n.kids.forEach(scan); })(root);
+  const Rmax = R0 + maxD * RW;
+
+  for(let d = 1; d <= maxD; d++)                                   // ring hairlines
+    dl.push({t:"circle", cx:0, cy:0, r:R0 + d * RW, stroke:pal.line, sw:1, alpha:.5});
+
+  (function draw(n){
+    if(n.d > 0){
+      const ri = R0 + (n.d - 1) * RW, ro = ri + RW - 5;
+      const span = n.a1 - n.a0, am = (n.a0 + n.a1) / 2, rm = (ri + ro) / 2;
+      const d = sector(0, 0, ri, ro, n.a0, n.a1);
+      dl.push({t:"path", d, fill:mix(pal.card, pal.accent, Math.min(.40, .05 + n.d * .085)),
+               stroke:pal.line2, sw:.9});
+
+      const p = P(n.pid);
+      const nameSz = n.d >= 4 ? 11 : 12.5;
+      const arcLen = span * Math.PI / 180 * rm;
+      let name = fullName(p);
+      const yrs = lifeLine(p);
+      if(arcLen >= measure(name, nameSz, "ui", 600) + 14){
+        let rot = am + 90; if(upsideDown(rot)) rot = am - 90;
+        const px = rm * Math.cos(am * Math.PI/180), py = rm * Math.sin(am * Math.PI/180);
+        dl.push({t:"text", x:px, y:py + (yrs ? -1 : 4), s:fitTo(name, arcLen - 12, nameSz, "ui", 600),
+                 size:nameSz, weight:600, fill:pal.ink, anchor:"middle", rot, rx:px, ry:py});
+        if(yrs && arcLen > 88)
+          dl.push({t:"text", x:px, y:py + 11, s:yrs, size:9, fam:"mono", fill:pal.ink2,
+                   anchor:"middle", rot, rx:px, ry:py});
+      } else {
+        const flip = upsideDown(am);
+        const at = flip ? ro - 8 : ri + 8, rot = flip ? am + 180 : am;
+        const px = at * Math.cos(am * Math.PI/180), py = at * Math.sin(am * Math.PI/180);
+        dl.push({t:"text", x:px, y:py + 3.5, s:fitTo(name, ro - ri - 16, nameSz, "ui", 600),
+                 size:nameSz, weight:600, fill:pal.ink, anchor:"start", rot, rx:px, ry:py});
+      }
+      const hx = rm * Math.cos(am * Math.PI/180), hy = rm * Math.sin(am * Math.PI/180);
+      hits.push({pid:n.pid, d, x:hx - 26, y:hy - 14, w:52, h:28, depth:n.d});
+    }
+    n.kids.forEach(draw);
+  })(root);
+
+  /* the middle: whoever the fan is drawn around */
+  dl.push({t:"circle", cx:0, cy:0, r:R0 - 6, fill:pal.card, stroke:pal.brass, sw:1.4});
+  const rp = P(root.pid);
+  const maxW = (R0 - 12) * 1.7;                 // stays inside the disc at these heights
+  const l1 = rp.first || fullName(rp), l2 = rp.last || "";
+  const mid = {size:17, fam:"disp", weight:600, fill:pal.ink, anchor:"middle"};
+  if(l2){
+    dl.push(Object.assign({t:"text", x:0, y:-5, s:fitTo(l1, maxW, 17, "disp", 600)}, mid));
+    dl.push(Object.assign({t:"text", x:0, y:14, s:fitTo(l2, maxW, 17, "disp", 600)}, mid));
+  } else {
+    dl.push(Object.assign({t:"text", x:0, y:4, s:fitTo(l1, maxW, 17, "disp", 600)}, mid));
+  }
+  const sub = lifeLine(rp);
+  if(sub) dl.push({t:"text", x:0, y:l2 ? 32 : 22, s:sub, size:10, fam:"mono",
+                   fill:pal.ink2, anchor:"middle"});
+  dl.push({t:"text", x:0, y:-R0 + 22, s:anc ? "ANCESTORS OF" : "DESCENDANTS OF", size:8,
+           fam:"mono", fill:pal.ink3, anchor:"middle", ls:"1.4px"});
+  hits.push({pid:root.pid, x:-R0 + 6, y:-R0 + 6, w:(R0 - 6) * 2, h:(R0 - 6) * 2, depth:0});
+
+  const box = anc
+    ? {x:-Rmax - 24, y:-Rmax - 24, w:(Rmax + 24) * 2, h:Rmax + R0 + 48}
+    : {x:-Rmax - 24, y:-Rmax - 24, w:(Rmax + 24) * 2, h:(Rmax + 24) * 2};
+  const rows = Array.from({length:maxD + 1}, (_, d) => ({depth:d, label:roman(d + 1)}));
+  return {kind:"fan", dl, hits, nodes:hits, rows, box};
+}
+
+/* ── TIMELINE ──────────────────────────────────────────────
+   One bar per life. Brass ties mark the year two of them met.
+   ──────────────────────────────────────────────────────── */
+function timeView(pal){
+  const base = layout(CARD.compact);
+  if(!base) return null;
+  const depth = {}; base.nodes.forEach(n => { depth[n.pid] = n.depth; });
+  const NOW = new Date().getFullYear();
+  const rows = [], undated = [];
+  for(const id in S.people){
+    if(depth[id] == null) continue;
+    const p = P(id);
+    const b = parseInt(yearOf(p.birth)), d = parseInt(yearOf(p.death));
+    if(!b && !d){ undated.push(id); continue; }
+    rows.push({pid:id, b: b || (d - 65), d: d || NOW, est: !b,
+               living: !d && !p.dead, depth: depth[id]});
+  }
+  if(!rows.length) return null;
+  rows.sort((a, b) => (a.depth - b.depth) || (a.b - b.b));
+
+  const lo = rows.reduce((m, r) => Math.min(m, r.b), 9999) - 3;
+  const hi = rows.reduce((m, r) => Math.max(m, r.d), 0) + 3;
+  const PPY = 9, LW = 200, RH = 26, HH = 26;
+  const X = y => (y - lo) * PPY;
+  const W = X(hi);
+
+  const dl = [], hits = [];
+  let y = 0;
+  const bands = [];
+  let cur = null;
+  for(const r of rows){
+    if(!cur || cur.depth !== r.depth){
+      if(cur) y += 16;
+      cur = {depth:r.depth, y};
+      bands.push(cur);
+      y += HH;
+    }
+    r.y = y; y += RH;
+  }
+  const H = y;
+
+  for(let yr = Math.ceil(lo / 10) * 10; yr <= hi; yr += 10){     // decade rules
+    const gx = X(yr), century = yr % 100 === 0;
+    dl.push({t:"path", d:`M${r1(gx)} -22 V${r1(H)}`, stroke:pal.line,
+             sw:century ? 1.2 : 1, dash:century ? null : "1 5", cap:"round", alpha:century ? .8 : .55});
+    dl.push({t:"text", x:gx, y:-28, s:String(yr), size:10, fam:"mono",
+             fill:century ? pal.ink2 : pal.ink3, anchor:"middle"});
+  }
+  for(const b of bands){
+    dl.push({t:"text", x:-LW, y:b.y + 15, s:"GENERATION " + roman(b.depth + 1), size:9.5,
+             fam:"mono", fill:pal.ink3, ls:"1.5px"});
+    dl.push({t:"path", d:`M${r1(-LW)} ${r1(b.y + 21)} H${r1(W)}`, stroke:pal.line, sw:1, alpha:.6});
+  }
+  for(const r of rows){
+    const p = P(r.pid), x0 = X(r.b), x1 = X(r.d), bh = 15, by = r.y + 4;
+    const w = Math.max(4, x1 - x0);
+    dl.push({t:"rect", x:x0, y:by, w, h:bh, r:bh/2,
+             fill:mix(pal.card, pal.accent, .10 + Math.min(r.depth, 5) * .055),
+             stroke:r.living ? pal.accent : pal.line2, sw:1, dash:r.est ? "4 3" : null});
+    dl.push({t:"text", x:-14, y:by + 11.5, s:fitTo(fullName(p), LW - 24, 11.5, "ui", 500),
+             size:11.5, weight:500, fill:pal.ink, anchor:"end"});
+    const label = (r.est ? "c." : "") + r.b + (r.living ? "–" : "–" + r.d);
+    if(w > measure(label, 9.5, "mono") + 16)
+      dl.push({t:"text", x:x0 + 8, y:by + 11, s:label, size:9.5, fam:"mono", fill:pal.ink2});
+    if(r.living)
+      dl.push({t:"path", d:`M${r1(x1 + 5)} ${r1(by + 3)} l6 4.5 -6 4.5`, stroke:pal.accent,
+               sw:1.6, cap:"round", join:"round"});
+    hits.push({pid:r.pid, x:-LW, y:r.y, w:LW + Math.max(w, 40), h:RH - 3, depth:r.depth});
+  }
+  const at = {}; rows.forEach(r => { at[r.pid] = r; });
+  for(const uid in S.unions){                                     // brass marriage ties
+    const u = S.unions[uid], yr = parseInt(yearOf(u.date));
+    const A = at[u.a], B = at[u.b];
+    if(!yr || !A || !B || yr < lo || yr > hi) continue;
+    const mx = X(yr), y1 = Math.min(A.y, B.y) + 11.5, y2 = Math.max(A.y, B.y) + 11.5;
+    dl.push({t:"path", d:`M${r1(mx)} ${r1(y1)} V${r1(y2)}`, stroke:pal.brass, sw:1.4,
+             cap:"round", alpha:.85, dash:u.divorced ? "4 3" : null});
+    dl.push({t:"circle", cx:mx, cy:(y1 + y2) / 2, r:7, fill:pal.brassT, stroke:pal.brass, sw:1});
+    dl.push({t:"text", x:mx, y:(y1 + y2) / 2 + 3.5, s:u.divorced ? "⚮" : "⚭", size:10,
+             fill:pal.brass, anchor:"middle"});
+  }
+  let bottom = H;
+  if(undated.length){
+    bottom += 20;
+    dl.push({t:"text", x:-LW, y:bottom, s:"DATES NOT RECORDED", size:9.5, fam:"mono",
+             fill:pal.ink3, ls:"1.5px"});
+    bottom += 16;
+    dl.push({t:"text", x:-LW, y:bottom,
+             s:fitTo(undated.map(id => fullName(P(id))).join(" · "), W + LW, 11, "ui", 400),
+             size:11, fill:pal.ink2});
+  }
+  return {kind:"time", dl, hits, nodes:hits,
+          rows:bands.map(b => ({depth:b.depth, label:roman(b.depth + 1)})),
+          box:{x:-LW - PAD, y:-52 - PAD, w:W + LW + PAD * 2, h:(bottom + 52) + PAD * 2}};
+}
+
+/* ── REGISTER ──────────────────────────────────────────────
+   The list you hand round the table: d'Aboville numbering, so
+   1.2.1 tells you exactly where someone sits without a chart.
+   ──────────────────────────────────────────────────────── */
+function registerView(pal){
+  const base = layout(CARD.compact);
+  if(!base) return null;
+  const idx = buildIndex();
+  const onChart = new Set(base.nodes.map(n => n.pid));
+  const roots = base.nodes.filter(n => n.depth === 0).sort((a, b) => a.x - b.x).map(n => n.pid);
+
+  const entries = [], seen = new Set(), married = new Set();
+  (function seed(){
+    let i = 0;
+    /* a spouse is listed against their partner, never given a number of
+       their own — otherwise the founding couple reads as two families */
+    for(const r of roots){ if(!seen.has(r) && !married.has(r)) walk(r, String(++i), 0); }
+  })();
+  function walk(pid, num, d){
+    if(seen.has(pid)) return;
+    seen.add(pid);
+    const p = P(pid);
+    const spouses = [];
+    const kids = [];
+    for(const uid of idx[pid].unions){
+      const u = U(uid), sp = partnerOf(u, pid);
+      if(sp && P(sp)){ spouses.push({p:P(sp), u}); married.add(sp); }
+      for(const k of (u.children || []).slice().sort(byBirth)) if(onChart.has(k)) kids.push(k);
+    }
+    const line1 = num + "  " + fullName(p) + (lifeLine(p) ? "   " + lifeLine(p) : "");
+    const extra = [];
+    for(const s of spouses)
+      extra.push((s.u.divorced ? "⚮" : s.u.status === "partners" ? "◇" : "⚭")
+        + (yearOf(s.u.date) ? " " + yearOf(s.u.date) : "") + " " + fullName(s.p));
+    const meta = [p.place, p.occupation].filter(Boolean).join(" · ");
+    if(meta) extra.push(meta);
+    entries.push({pid, d, line1, line2:extra.join("   ·   ")});
+    let i = 0;
+    for(const k of kids) walk(k, num + "." + (++i), d + 1);
+  }
+  if(!entries.length) return null;
+
+  const LH = 15, GAP = 5, CWID = 330, CGAP = 38;
+  entries.forEach(e => { e.h = (e.line2 ? LH * 2 : LH) + GAP; });
+  const totalH = entries.reduce((t, e) => t + e.h, 0);
+  const N = clamp(Math.round(Math.sqrt(totalH / (CWID * 1.25))), 1, 5);
+  const perCol = totalH / N;
+
+  const dl = [], hits = [];
+  let col = 0, cy = 0, maxH = 0;
+  for(const e of entries){
+    if(cy > perCol && col < N - 1){ col++; cy = 0; }
+    const cx = col * (CWID + CGAP), ind = Math.min(e.d, 5) * 11;
+    dl.push({t:"text", x:cx + ind, y:cy + 11, s:fitTo(e.line1, CWID - ind, 11.5, "ui", 600),
+             size:11.5, weight:600, fill:pal.ink});
+    if(e.line2)
+      dl.push({t:"text", x:cx + ind + 10, y:cy + 11 + LH,
+               s:fitTo(e.line2, CWID - ind - 10, 10.5, "ui", 400),
+               size:10.5, fill:pal.ink2});
+    hits.push({pid:e.pid, x:cx + ind - 3, y:cy, w:CWID - ind, h:e.h, depth:e.d});
+    cy += e.h;
+    maxH = Math.max(maxH, cy);
+  }
+  for(let c = 1; c < N; c++)                                   // column rules
+    dl.push({t:"path", d:`M${r1(c * (CWID + CGAP) - CGAP/2)} -6 V${r1(maxH)}`,
+             stroke:pal.line, sw:1, alpha:.7});
+  const W = N * CWID + (N - 1) * CGAP;
+  return {kind:"register", dl, hits, nodes:hits, rows:base.rows,
+          box:{x:-PAD, y:-PAD - 6, w:W + PAD * 2, h:maxH + PAD * 2 + 6}};
+}
+
+/* ── view dispatch ─────────────────────────────────────── */
+function makeModel(pal){
+  pal = pal || activePal();
+  try {
+    if(ui.view === "tree")     return treeView(pal);
+    if(ui.view === "fan")      return fanView(pal);
+    if(ui.view === "time")     return timeView(pal);
+    if(ui.view === "register") return registerView(pal);
+    return layout();
+  } catch(err){
+    console.error("view failed", err);
+    return layout();
+  }
+}
+function viewPaint(model, scale, palName, title){
+  return model.kind === "chart"
+    ? renderCanvas(model, scale, palName, title)
+    : renderCanvasDL(model, scale, palName, title);
+}
+function hitsSVG(model){
+  if(!model.hits) return "";
+  return model.hits.map(h => `<rect class="node hit" data-id="${h.pid}" x="${r1(h.x)}" y="${r1(h.y)}"`
+    + ` width="${r1(h.w)}" height="${r1(h.h)}" rx="4"/>`).join("");
+}
+function selRing(model){
+  if(model.kind === "chart" || !ui.sel || !model.hits) return "";
+  const h = model.hits.find(h => h.pid === ui.sel);
+  if(!h) return "";
+  return `<rect class="selring" x="${r1(h.x - 2)}" y="${r1(h.y - 2)}" width="${r1(h.w + 4)}"`
+       + ` height="${r1(h.h + 4)}" rx="6"/>`;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1969,12 +2607,15 @@ function planSheets(){
   const m     = printOpts.margin * MM;
   const hasTitle = !!(printOpts.title || printOpts.subtitle);
   const footH = printOpts.note || printOpts.crop ? 7 * MM : 0;
-  const box   = boxWithTitle(LAY, hasTitle);
+  /* the sheet is always drawn in the register's light palette,
+     whatever the screen is showing */
+  const model = makeModel(PAL.light) || LAY;
+  const box   = boxWithTitle(model, hasTitle);
 
   if(printOpts.fitMode === "fit"){
     const availW = pageW - 2*m, availH = pageH - 2*m - footH;
     const scale  = Math.min(availW / box.w, availH / box.h);
-    return {pageW, pageH, m, footH, hasTitle, box, scale, cols:1, rows:1, tiled:false,
+    return {pageW, pageH, m, footH, hasTitle, box, model, scale, cols:1, rows:1, tiled:false,
             availW, availH, over:0};
   }
   const scale = printOpts.scale / 100;
@@ -1983,7 +2624,7 @@ function planSheets(){
   const stepW = Math.max(40, availW - over), stepH = Math.max(40, availH - over);
   const cols = Math.max(1, Math.ceil((box.w * scale - over) / stepW));
   const rows = Math.max(1, Math.ceil((box.h * scale - over) / stepH));
-  return {pageW, pageH, m, footH, hasTitle, box, scale, cols, rows, tiled:true,
+  return {pageW, pageH, m, footH, hasTitle, box, model, scale, cols, rows, tiled:true,
           availW, availH, stepW, stepH, over};
 }
 
@@ -1993,7 +2634,7 @@ function paintPreview(){
   const maxW = 268, maxH = 200;
   const gw = plan.pageW * plan.cols, gh = plan.pageH * plan.rows;
   const k = Math.min(maxW / gw, maxH / gh);
-  const svgInner = chartSVG(LAY, {selectable:false, ns:"pv",
+  const svgInner = viewSVG(plan.model, {selectable:false, ns:"pv", pal:PAL.light,
     title: plan.hasTitle ? {main:printOpts.title, sub:printOpts.subtitle} : null});
   const b = plan.box;
 
@@ -2024,7 +2665,7 @@ function buildPrintSheets(){
   const plan = planSheets();
   const root = $("#printRoot");
   const b = plan.box;
-  const svgInner = chartSVG(LAY, {selectable:false, ns:"pr",
+  const svgInner = viewSVG(plan.model, {selectable:false, ns:"pr", pal:PAL.light,
     title: plan.hasTitle ? {main:printOpts.title, sub:printOpts.subtitle} : null});
   const svgFor = (w, h) =>
     `<svg width="${w.toFixed(1)}" height="${h.toFixed(1)}" viewBox="${r1(b.x)} ${r1(b.y)} ${r1(b.w)} ${r1(b.h)}"
@@ -2104,18 +2745,21 @@ async function offer(filename, data, mime){
   return true;
 }
 function slug(){
-  return (printOpts.title || guessTitle()).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "family-tree";
+  const base = (printOpts.title || guessTitle())
+    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "family-tree";
+  return ui.view === "chart" ? base : base + "-" + ui.view;
 }
 async function exportPNG(){
-  if(!LAY) return;
+  const model = makeModel(PAL.light);
+  if(!model) return;
   const hasTitle = !!(printOpts.title || printOpts.subtitle);
-  const box = boxWithTitle(LAY, hasTitle);
+  const box = boxWithTitle(model, hasTitle);
   const target = 3800;                      // a comfortable poster raster
   const MAXPX = 11000;                      // stay inside the browser's canvas limit
   const scale = Math.max(0.35, Math.min(clamp(target / box.w, 1, 4),
                                         MAXPX / box.w, MAXPX / (box.h + 72)));
-  const cv = renderCanvas(LAY, scale, "light",
-                          hasTitle ? {main:printOpts.title, sub:printOpts.subtitle} : null);
+  const cv = viewPaint(model, scale, "light",
+                       hasTitle ? {main:printOpts.title, sub:printOpts.subtitle} : null);
   cv.toBlob(async blob => {
     if(!blob) return toast("Could not build the image", true);
     const ok = await offer(slug() + ".png", blob, "image/png");
@@ -2123,11 +2767,12 @@ async function exportPNG(){
   }, "image/png");
 }
 async function exportSVG(){
-  if(!LAY) return;
+  const model = makeModel(PAL.light);
+  if(!model) return;
   const hasTitle = !!(printOpts.title || printOpts.subtitle);
-  const box = boxWithTitle(LAY, hasTitle);
-  const inner = chartSVG(LAY, {selectable:false, ns:"ex",
-                               title: hasTitle ? {main:printOpts.title, sub:printOpts.subtitle} : null});
+  const box = boxWithTitle(model, hasTitle);
+  const inner = viewSVG(model, {selectable:false, ns:"ex", pal:PAL.light,
+                                title: hasTitle ? {main:printOpts.title, sub:printOpts.subtitle} : null});
   const style = `
     @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Mono&family=Public+Sans:wght@400;500;600&display=swap");
     svg{--f-ui:"Public Sans",sans-serif;--f-mono:"IBM Plex Mono",monospace;--f-disp:"Fraunces",Georgia,serif;
@@ -2294,7 +2939,8 @@ function save(){
   saveTimer = setTimeout(() => {
     try {
       localStorage.setItem(KEY, JSON.stringify({data:S, ui:{
-        mode:ui.mode, focus:ui.focus, style:ui.style, gens:ui.gens, isSample:ui.isSample
+        view:ui.view, mode:ui.mode, focus:ui.focus, style:ui.style,
+        gens:ui.gens, isSample:ui.isSample
       }}));
     } catch(e){
       toast("Browser storage is full — save a family file", true);
@@ -2416,11 +3062,25 @@ function zoomBy(f){
 }
 
 /* ── chrome events ─────────────────────────────────────── */
+const VIEWS = {chart:"vChart", tree:"vTree", fan:"vFan", time:"vTime", register:"vList"};
+const VIEW_NAME = {chart:"Register chart", tree:"Tree", fan:"Fan chart",
+                   time:"Timeline", register:"Register list"};
+function setView(v){
+  if(!VIEWS[v]) v = "chart";
+  ui.view = v;
+  for(const k in VIEWS) $("#" + VIEWS[k]).setAttribute("aria-pressed", k === v);
+  /* card detail and generation bands only mean anything on the chart */
+  const chart = v === "chart";
+  $("#tPhoto").disabled = !chart;
+  $("#tGens").disabled  = !chart;
+  $("#tPhoto").style.opacity = $("#tGens").style.opacity = chart ? "" : ".35";
+  $(".legend").style.display = chart ? "" : "none";
+  save();
+}
 function setMode(m){
   ui.mode = m;
-  $("#mDesc").setAttribute("aria-pressed", m === "desc");
-  $("#mAnc").setAttribute("aria-pressed", m === "anc");
-  $("#mAll").setAttribute("aria-pressed", m === "all");
+  const sel = $("#scope");
+  if(sel) sel.value = m;
   if((m === "desc" || m === "anc") && !ui.focus){
     const idx = buildIndex(), ids = Object.keys(S.people);
     if(ids.length){
@@ -2432,9 +3092,11 @@ function setMode(m){
   }
   save();
 }
-$("#mDesc").addEventListener("click", () => { setMode("desc"); render(); fitView(); });
-$("#mAnc").addEventListener("click",  () => { setMode("anc");  render(); fitView(); });
-$("#mAll").addEventListener("click",  () => { setMode("all");  render(); fitView(); });
+for(const k in VIEWS)
+  $("#" + VIEWS[k]).addEventListener("click", () => {
+    setView(k); render(); fitView(); toast(VIEW_NAME[k]);
+  });
+$("#scope").addEventListener("change", e => { setMode(e.target.value); render(); fitView(); });
 $("#btnFocus").addEventListener("click", () => {
   choosePerson({title:"Whose tree?", subtitle:"The chart is drawn around this person.", exclude:[]}, id => {
     ui.focus = id; ui.sel = id; render(); fitView();
@@ -2491,7 +3153,10 @@ $("#btnTheme").addEventListener("click", () => {
   const next = cur ? (cur === "dark" ? "light" : "dark") : (sysDark ? "light" : "dark");
   document.documentElement.setAttribute("data-theme", next);
   try { localStorage.setItem(KEY + ".theme", next); } catch(e){}
+  drawChart();                  // the display-list views bake their colours in
 });
+window.matchMedia("(prefers-color-scheme:dark)")
+  .addEventListener("change", () => { if(!document.documentElement.getAttribute("data-theme")) drawChart(); });
 $("#btnHelp").addEventListener("click", helpDialog);
 
 function helpDialog(){
@@ -2500,6 +3165,7 @@ function helpDialog(){
       <p>Built for filling in at a table with the family talking over each other.</p></div></div>
     <div class="modal-body">
       <div class="keys">
+        <span class="k"><kbd>1</kbd>–<kbd>5</kbd></span><span>Switch view — chart, tree, fan, timeline, register</span>
         <span class="k"><kbd>N</kbd></span><span>Add a person and start typing their name</span>
         <span class="k"><kbd>F</kbd></span><span>Fit the whole chart on screen</span>
         <span class="k"><kbd>/</kbd></span><span>Jump to the search box</span>
@@ -2509,7 +3175,19 @@ function helpDialog(){
         <span class="k">drag</span><span>Pan the chart · scroll or pinch to zoom</span>
         <span class="k">double-click</span><span>Redraw the chart around that person</span>
       </div>
-      <fieldset><legend>How the chart reads</legend>
+      <fieldset><legend>The five views</legend>
+        <div class="keys" style="line-height:1.5">
+          <span class="k"><b>Chart</b></span><span>The full record — photos, dates, places, every link.</span>
+          <span class="k"><b>Tree</b></span><span>Names on branches that thicken with the size of each line of descent.</span>
+          <span class="k"><b>Fan</b></span><span>Generations as rings. Best poster for a deep family.</span>
+          <span class="k"><b>Timeline</b></span><span>One bar per life, so you can see who overlapped whom.</span>
+          <span class="k"><b>Register</b></span><span>A numbered list to hand round — 1.2.1 places anyone without a chart.</span>
+        </div>
+        <div style="font-size:12px;color:var(--ink-3);margin-top:9px;line-height:1.6">
+          Every view prints and exports the same way, so pick one and hit Print.
+        </div>
+      </fieldset>
+      <fieldset><legend>Notation</legend>
         <div style="font-size:12.5px;line-height:1.7;color:var(--ink-2)">
           <b style="color:var(--brass)">⚭</b> a marriage, with its year underneath &nbsp;·&nbsp;
           <b style="color:var(--brass)">⚮</b> divorced or separated &nbsp;·&nbsp;
@@ -2539,7 +3217,12 @@ document.addEventListener("keydown", e => {
   }
   if(typing || !$("#scrim").hidden) return;
   const k = e.key.toLowerCase();
-  if(k === "n"){ e.preventDefault(); addFlow(); }
+  if(/^[1-5]$/.test(k)){
+    e.preventDefault();
+    const v = Object.keys(VIEWS)[+k - 1];
+    setView(v); render(); fitView(); toast(VIEW_NAME[v]);
+  }
+  else if(k === "n"){ e.preventDefault(); addFlow(); }
   else if(k === "f"){ e.preventDefault(); fitView(); }
   else if(k === "p"){ e.preventDefault(); printDialog(); }
   else if(k === "/"){ e.preventDefault(); $("#app").classList.remove("rail-hidden"); $("#q").focus(); }
@@ -2609,6 +3292,7 @@ function loadSample(){
             note:"Compiled for the Diwali gathering"};
   printOpts.title = S.meta.title; printOpts.subtitle = S.meta.subtitle; printOpts.note = S.meta.note;
   ui.isSample = true; ui.focus = hari; ui.sel = null; ui.mode = "desc";
+  setView(ui.view || "chart");
   setMode("desc");
   save(); render(); fitView();
   toast("Sample family loaded");
@@ -2622,8 +3306,15 @@ function loadSample(){
   } catch(e){}
 
   const had = load();
+  /* ?view=tree — so a link can open straight into the picture you meant */
+  try {
+    const want = new URLSearchParams(location.search).get("view");
+    if(want && VIEWS[want]) ui.view = want;
+  } catch(e){}
+
   if(!had) loadSample();
   else {
+    setView(ui.view || "chart");
     setMode(ui.mode || "desc");
     printOpts.title = S.meta.title || ""; printOpts.subtitle = S.meta.subtitle || "";
     printOpts.note = S.meta.note || "";

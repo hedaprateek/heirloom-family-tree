@@ -20,8 +20,22 @@ Handled properly: remarriages, divorces and separations, single parents, unknown
 partners, adopted-in spouses, and people whose own family sits elsewhere on the
 chart (a faint dashed line runs to them rather than duplicating the card).
 
-Three views: **Descendants** of a chosen person, **Ancestors** as a pedigree
-chart, or **Everyone** with unconnected trees side by side.
+Scope it to the **descendants** of a chosen person, their **ancestors**, or
+**everyone** with unconnected families side by side.
+
+## Five views of the same family
+
+Switch with the buttons in the top bar or the <kbd>1</kbd>–<kbd>5</kbd> keys.
+All five print and export identically, so pick the picture you want and hit
+Print. A link can also open straight into one: `?view=tree`.
+
+| View | What it's for |
+|---|---|
+| **Chart** | The full record — photos, dates, places, occupations, every link. |
+| **Tree** | Names on branches that thicken in proportion to how many descendants each line carries. Trunk, roots and new growth at the tips. |
+| **Fan** | Generations as concentric rings, each slice sized by how much of the family sits behind that person. The best poster for a deep family. |
+| **Timeline** | One bar per life across the years, grouped by generation, with brass ties marking the year two people married. Shows at a glance who overlapped whom. |
+| **Register** | A numbered list to hand round the table, using d'Aboville numbering — `1.2.1` places anyone exactly without needing the chart. |
 
 ## Reading the chart
 
@@ -66,6 +80,7 @@ downloads are blocked.
 
 | | |
 |---|---|
+| <kbd>1</kbd>–<kbd>5</kbd> | switch view — chart, tree, fan, timeline, register |
 | <kbd>N</kbd> | add a person and start typing their name |
 | <kbd>F</kbd> | fit the whole chart on screen |
 | <kbd>/</kbd> | jump to search |
