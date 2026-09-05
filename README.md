@@ -32,7 +32,7 @@ Print. A link can also open straight into one: `?view=tree`.
 | View | What it's for |
 |---|---|
 | **Chart** | The full record — photos, dates, places, occupations, every link. |
-| **Tree** | Names on branches that thicken in proportion to how many descendants each line carries. Trunk, roots and foliage at the tips. The card-detail button adds years, then photos. |
+| **Tree** | An actual tree. A trunk at the foot, branches forking and splaying up into a crown, foliage at the growing tips, names riding on the wood. Each limb thickens in proportion to how many descendants that line carries. The card-detail button adds years, then photos. |
 | **Fan** | Generations as concentric rings, each slice sized by how much of the family sits behind that person. The best poster for a deep family. |
 | **Timeline** | One bar per life across the years, grouped by generation, with brass ties marking the year two people married. Shows at a glance who overlapped whom. |
 | **Register** | A numbered list to hand round the table, using d'Aboville numbering — `1.2.1` places anyone exactly without needing the chart. |
