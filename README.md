@@ -33,7 +33,7 @@ too: `?view=tree&shape=rows`.
 | View | What it's for |
 |---|---|
 | **Chart** | The full record — photos, dates, places, occupations, every link. |
-| **Tree** | An actual tree — trunk at the foot, branches forking up into a crown, foliage at the growing tips, names on the wood. Comes in **two shapes**: *grown*, which splays into a canopy, and *generations*, which keeps the same tree on tidy rows. Click **Tree** again to switch. Limbs thicken in proportion to how many descendants that line carries. The card-detail button adds years, then photos. |
+| **Tree** | An actual tree — showing name, dates and place · occupation; trunk at the foot, branches forking up into a crown, foliage at the growing tips, names on the wood. Comes in **two shapes**: *grown*, which splays into a canopy, and *generations*, which keeps the same tree on tidy rows. Click **Tree** again to switch. Limbs thicken in proportion to how many descendants that line carries. The card-detail button adds years, then photos. |
 | **Fan** | Generations as concentric rings, each slice sized by how much of the family sits behind that person. The best poster for a deep family. |
 | **Timeline** | One bar per life across the years, grouped by generation, with brass ties marking the year two people married. Shows at a glance who overlapped whom. |
 | **Register** | A numbered list to hand round the table, using d'Aboville numbering — `1.2.1` places anyone exactly without needing the chart. |
@@ -211,6 +211,17 @@ collecting and everyone gets the combined tree.
 If you would rather everyone typed into one place, a spreadsheet works too —
 see above — or say the word and we can talk about what a real shared backend
 would take.
+
+## Writing in Hindi
+
+Names, places and occupations can be written in Devanagari — **हरि प्रसाद
+देशमुख**, **नागपुर · रेलवे क्लर्क** — and they render, measure, print and
+export exactly like Latin text. Noto Sans and Noto Serif Devanagari sit behind
+the register faces in every font stack, including the ones the canvas painter
+and the standalone SVG export use, so nothing falls back to a mismatched
+system font. Hindi and English names can sit side by side in the same tree.
+
+The interface itself is still in English.
 
 ## Your data
 
