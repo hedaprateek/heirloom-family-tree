@@ -255,6 +255,12 @@ button{cursor:pointer;background:none;border:0;padding:0}
 }
 .sample-flag button{color:var(--brass);text-decoration:underline;font-size:12px;font-weight:600;padding:3px 8px;border-radius:999px}
 .sample-flag button:hover{background:color-mix(in srgb,var(--brass) 15%,transparent)}
+.share-flag{
+  background:var(--accent-tint);color:var(--accent-2);
+  border-color:color-mix(in srgb,var(--accent) 38%,transparent);
+}
+.share-flag button{color:var(--accent-2)}
+.share-flag button:hover{background:color-mix(in srgb,var(--accent) 16%,transparent)}
 
 /* ── inspector ───────────────────────────────────────────── */
 .insp{
@@ -439,6 +445,7 @@ kbd{
 #chart .nm-sm{fill:var(--ink-2);font:400 10.5px var(--f-ui);font-style:italic}
 #chart .dt{fill:var(--ink-2);font:400 10.5px var(--f-mono);letter-spacing:.01em}
 #chart .mt{fill:var(--ink-3);font:400 10px var(--f-ui)}
+#chart .sire{fill:var(--ink-3);font:400 9.5px var(--f-ui);opacity:.9}
 #chart .mono-bg{fill:hsl(var(--h) 26% 85%)}
 #chart .mono-tx{fill:hsl(var(--h) 32% 30%);font:600 13px var(--f-ui)}
 :root[data-theme="dark"] #chart .mono-bg{fill:hsl(var(--h) 22% 30%)}
@@ -506,6 +513,7 @@ kbd{
 #printRoot .nm-sm{fill:var(--ink-2);font:400 10.5px var(--f-ui);font-style:italic}
 #printRoot .dt{fill:var(--ink-2);font:400 10.5px var(--f-mono)}
 #printRoot .mt{fill:var(--ink-3);font:400 10px var(--f-ui)}
+#printRoot .sire{fill:var(--ink-3);font:400 9.5px var(--f-ui)}
 #printRoot .mono-bg{fill:hsl(var(--h) 26% 85%)}
 #printRoot .mono-tx{fill:hsl(var(--h) 32% 30%);font:600 13px var(--f-ui)}
 #printRoot .link{fill:none;stroke:var(--line-2);stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
@@ -534,6 +542,7 @@ kbd{
 .sheetprev .nm-sm{fill:var(--ink-2);font:400 10.5px var(--f-ui);font-style:italic}
 .sheetprev .dt{fill:var(--ink-2);font:400 10.5px var(--f-mono)}
 .sheetprev .mt{fill:var(--ink-3);font:400 10px var(--f-ui)}
+.sheetprev .sire{fill:var(--ink-3);font:400 9.5px var(--f-ui)}
 .sheetprev .mono-bg{fill:hsl(var(--h) 26% 85%)}
 .sheetprev .mono-tx{fill:hsl(var(--h) 32% 30%);font:600 13px var(--f-ui)}
 .sheetprev .link{fill:none;stroke:var(--line-2);stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
@@ -687,6 +696,11 @@ kbd{
       <button id="flagClear">Start my own</button>
     </div>
 
+    <div class="sample-flag share-flag" id="shareFlag" hidden>
+      <span id="shareFlagText"></span>
+      <button id="flagSend">Send my additions back</button>
+    </div>
+
     <div class="dock zoom">
       <button id="zOut" title="Zoom out (−)" aria-label="Zoom out"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3.5 8h9"/></svg></button>
       <span class="z mono" id="zLabel">100%</span>
@@ -788,6 +802,7 @@ let ui = {
 let LAY = null;                 // last computed layout
 let INLAW = {};                 // pid -> true for people who married in
 let ONCHART = {};               // pid -> true for anyone the main chart draws
+let ORIGIN = null;              // set when this copy arrived from someone's share
 let DL  = null;                 // downloads capability, if the host grants one
 const softly = pid => ui.softInlaw && !!INLAW[pid];
 const undoStack = [], redoStack = [];
@@ -1237,6 +1252,14 @@ function finish(extra, ctx, ancestors){
   const pos = {};
   ctx.nodes.forEach(n => { pos[n.pid] = n; });
 
+  /* Someone who married in leaves their own parents off the chart. Name them
+     underneath instead, the way a register does: d/o Govind & Sarala Joshi. */
+  for(const n of ctx.nodes){
+    if(!n.inlaw) continue;
+    const par = (ctx.idx[n.pid].parents || []).filter(q => S.people[q] && !pos[q]);
+    if(par.length) n.sire = kinLine(P(n.pid), par);
+  }
+
   /* cross-family links, resolved now that everything has a position */
   const crossPaths = [];
   for(const c of ctx.cross){
@@ -1277,6 +1300,17 @@ function finish(extra, ctx, ancestors){
     minX, maxX, minY, maxY,
     box:{x:x0, y:y0, w:(maxX + PAD) - x0, h:(maxY + PAD) - y0}
   };
+}
+/** "d/o Govind & Sarala Joshi" — parents sharing a surname share it here too. */
+function kinLine(p, par){
+  const who = par.map(q => P(q)).filter(Boolean);
+  if(!who.length) return "";
+  const pre = p.sex === "F" ? "d/o " : p.sex === "M" ? "s/o " : "child of ";
+  if(who.length === 1) return pre + fullName(who[0]);
+  const a = who[0], b = who[1];
+  return pre + (a.last && a.last === b.last
+    ? [a.first, "&", b.first, a.last].filter(Boolean).join(" ")
+    : who.map(fullName).join(" & "));
 }
 function roman(n){
   let out = "", v = n;
@@ -1341,6 +1375,9 @@ function cardSVG(n, model, opts){
     g += `<text class="nm" x="${tx}" y="20"${nst}>${esc(fit(name, tw, nsz, CW.nm))}</text>`;
     if(life) g += `<text class="dt" x="${tx}" y="37">${esc(life)}</text>`;
   }
+  if(n.sire)
+    g += `<text class="sire" x="${C.w / 2}" y="${C.h + 14}" text-anchor="middle">`
+       + `${esc(fit(n.sire, C.w + 46, 9.5, CW.mt))}</text>`;
   g += `</g>`;
   return g;
 }
@@ -1576,6 +1613,12 @@ function renderCanvas(model, scale, palIn, title){
         x.fillStyle = sub; x.font = '400 10.5px ' + FAM.mono;
         x.fillText(life, tx, 37);
       }
+    }
+    if(n.sire){
+      x.fillStyle = pal.ink3; x.font = '400 9.5px ' + FAM.ui;
+      x.textAlign = "center";
+      x.fillText(fit(n.sire, C.w + 46, 9.5, CW.mt), C.w / 2, C.h + 14);
+      x.textAlign = "start";
     }
     x.restore();
   }
@@ -1956,6 +1999,9 @@ function treeView(pal){
                size:nsz, weight:wt, fill:soft ? pal.ink2 : pal.ink});
       if(yr) dl.push({t:"text", x:tx, y:c.y + 14, s:yr, size:YSZ, fam:"mono",
                       fill:soft ? pal.ink3 : pal.ink2});
+      const sire = (pos[pid] || {}).sire;
+      if(sire) dl.push({t:"text", x:nx + nw/2, y:c.y + c.h/2 + 14, anchor:"middle",
+                        s:fitTo(sire, nw + 44, 9.5, "ui"), size:9.5, fill:pal.ink3});
       hits.push({pid, x:nx - 3, y:c.y - c.h/2, w:nw + 6, h:c.h, depth:c.depth});
     });
   }
@@ -2472,6 +2518,13 @@ function render(){
   renderInspector();
   $("#focusName").textContent = ui.focus && P(ui.focus) ? fullName(P(ui.focus)) : "Whole family";
   $("#sampleFlag").hidden = !ui.isSample;
+  $("#shareFlag").hidden = !ORIGIN;
+  if(ORIGIN){
+    const n = addedSince();
+    $("#shareFlagText").textContent =
+      (ORIGIN.by ? ORIGIN.by + " shared this with you" : "Shared with you")
+      + (n ? " · you have added " + n + (n === 1 ? " person" : " people") : " · add what you know");
+  }
   $("#btnFocus").disabled = ui.mode === "all";
 }
 
@@ -3456,6 +3509,7 @@ async function exportSVG(){
     .card-sel{display:none}.stripe{fill:var(--accent);opacity:.34}
     .nm{fill:var(--ink);font:600 13px var(--f-ui)}.nm-sm{fill:var(--ink-2);font:italic 400 10.5px var(--f-ui)}
     .dt{fill:var(--ink-2);font:400 10.5px var(--f-mono)}.mt{fill:var(--ink-3);font:400 10px var(--f-ui)}
+    .sire{fill:var(--ink-3);font:400 9.5px var(--f-ui)}
     .mono-bg{fill:hsl(var(--h) 26% 85%)}.mono-tx{fill:hsl(var(--h) 32% 30%);font:600 13px var(--f-ui)}
     .link{fill:none;stroke:var(--line-2);stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
     .link.cross{stroke:var(--accent-ring);stroke-dasharray:2 4;stroke-width:1.2}
@@ -3542,6 +3596,9 @@ function fileDialog(){
           <button class="rel-item" style="width:100%;text-align:left" id="fShare">
             <span class="txt"><span class="nm">Share a link</span>
             <span class="meta">the whole tree in one URL — no account needed</span></span></button>
+          <button class="rel-item" style="width:100%;text-align:left" id="fCollect">
+            <span class="txt"><span class="nm">Collect everyone’s additions</span>
+            <span class="meta">paste back several links or files and merge them in one go</span></span></button>
           <button class="rel-item" style="width:100%;text-align:left" id="fCopy">
             <span class="txt"><span class="nm">Copy data to clipboard</span>
             <span class="meta">paste it anywhere as a backup</span></span></button>
@@ -3578,6 +3635,7 @@ function fileDialog(){
   $("#fOpen").addEventListener("click", () => { closeModal(); importJSON("replace"); });
   $("#fMerge").addEventListener("click", () => { closeModal(); importJSON("merge"); });
   $("#fShare").addEventListener("click", () => { closeModal(); shareDialog(); });
+  $("#fCollect").addEventListener("click", () => { closeModal(); collectDialog(); });
   $("#fSheetIn").addEventListener("click", () => { closeModal(); importSheet(); });
   $("#fSheetOut").addEventListener("click", () => { closeModal(); exportXLSX(); });
   $("#fSheetTpl").addEventListener("click", () => { closeModal(); downloadTemplate("xlsx"); });
@@ -3598,7 +3656,7 @@ function fileDialog(){
         <button class="btn" data-close>Keep</button>
         <button class="btn danger" id="cOk">Clear</button></div></div>`);
     $("#cOk").addEventListener("click", () => {
-      snapshot(); S = blankDoc(); ui.isSample = false; ui.sel = null; ui.focus = null;
+      snapshot(); S = blankDoc(); ORIGIN = null; ui.isSample = false; ui.sel = null; ui.focus = null;
       closeModal(); commit("Cleared");
     });
   });
@@ -4252,10 +4310,29 @@ async function shareURL(o){
     p.id = id;
     people[id] = p;
   }
-  const doc = {app:"heirloom", version:1, data:{people, unions:S.unions, meta:S.meta, seq:S.seq}};
+  const meta = Object.assign({}, S.meta);
+  if(o.by) meta.sharedBy = o.by;
+  if(o.contributor){ meta.contributedBy = o.contributor; delete meta.sharedBy; }
+  const doc = {app:"heirloom", version:1, data:{people, unions:S.unions, meta, seq:S.seq}};
   const packed = await pack(JSON.stringify(doc));
   const q = o.view && o.view !== "chart" ? "?view=" + o.view : "";
   return (o.base || linkBase()) + q + "#f=" + packed;
+}
+/** Pull a family out of a pasted Heirloom link. */
+async function docFromLink(text){
+  const m = String(text || "").match(/#f=([A-Za-z0-9\-_]+)/);
+  if(!m) return null;
+  try {
+    const j = JSON.parse(await unpack(m[1]));
+    const d = j && j.data ? j.data : j;
+    return d && d.people ? d : null;
+  } catch(e){ return null; }
+}
+/** How many people this copy has gained since it arrived. */
+function addedSince(){
+  if(!ORIGIN || !ORIGIN.baseIds) return 0;
+  const had = new Set(ORIGIN.baseIds);
+  return Object.keys(S.people).filter(id => !had.has(id)).length;
 }
 
 function shareDialog(){
@@ -4270,7 +4347,9 @@ function shareDialog(){
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
       </div>
       <div class="modal-body">
-        <div class="fgrid two">
+        <label class="f"><span>Your name</span>
+          <input id="shBy" value="${esc(S.meta.sharedBy || "")}" placeholder="so the family knows who sent it" autocomplete="off"></label>
+        <div class="fgrid two" style="margin-top:10px">
           <label class="f"><span>Opens in</span><select id="shView">
             ${Object.keys(VIEWS).map(k => `<option value="${k}"${ui.view===k?" selected":""}>${VIEW_NAME[k]}</option>`).join("")}
           </select></label>
@@ -4303,7 +4382,9 @@ function shareDialog(){
   let url = "";
   async function build(){
     const photos = $("#shPhoto").value === "1";
-    url = await shareURL({photos, view:$("#shView").value});
+    const by = $("#shBy").value.trim();
+    if(by !== (S.meta.sharedBy || "")){ S.meta.sharedBy = by; save(); }
+    url = await shareURL({photos, by, view:$("#shView").value});
     $("#shURL").value = url;
     const kb = (url.length / 1024).toFixed(1);
     const long = url.length > 8000;
@@ -4323,6 +4404,7 @@ function shareDialog(){
   }
   $("#shView").addEventListener("change", build);
   $("#shPhoto").addEventListener("change", build);
+  $("#shBy").addEventListener("input", build);
   $("#shCopy").addEventListener("click", async () => {
     try { await navigator.clipboard.writeText(url); toast("Link copied"); }
     catch(e){ $("#shURL").select(); toast("Press Ctrl+C to copy", true); }
@@ -4392,7 +4474,7 @@ function mergeReport(r){
   if(r.links)   bits.push(r.links + " links joined up");
   return bits.join(" · ");
 }
-function importDoc(d, mode){
+function importDoc(d, mode, fromShare){
   snapshot();
   if(mode === "merge"){
     const r = mergeDoc(normalise(d));
@@ -4401,6 +4483,10 @@ function importDoc(d, mode){
   } else {
     S = normalise(d);
     ui.isSample = false; ui.sel = null; ui.focus = null;
+    /* remember this arrived from someone, so additions can go back to them */
+    ORIGIN = fromShare
+      ? {by:(d.meta && d.meta.sharedBy) || "", at:Date.now(), baseIds:Object.keys(S.people)}
+      : null;
     save(); render(); fitView();
     toast("Opened " + Object.keys(S.people).length + " people");
   }
@@ -4411,11 +4497,13 @@ function offerIncoming(d){
   const n = Object.keys(d.people || {}).length;
   const mine = Object.keys(S.people).length;
   const title = (d.meta && d.meta.title) || "A shared family";
-  if(!mine || ui.isSample){ importDoc(d, "replace"); return; }
+  const by = (d.meta && d.meta.sharedBy) || "";
+  if(!mine || ui.isSample){ importDoc(d, "replace", true); return; }
   openModal(`
     <div class="modal" style="width:min(100%,470px)">
       <div class="modal-head"><div><h2>${esc(title)}</h2>
-        <p>Someone shared a tree of <b>${n}</b> people. You already have <b>${mine}</b> here.</p></div></div>
+        <p>${by ? esc(by) + " shared" : "Someone shared"} a tree of <b>${n}</b> people.
+        You already have <b>${mine}</b> here.</p></div></div>
       <div class="modal-body"><div class="rel">
         <button class="rel-item" style="width:100%;text-align:left" data-mode="merge">
           <span class="txt"><span class="nm">Merge into mine</span>
@@ -4429,7 +4517,141 @@ function offerIncoming(d){
     </div>`);
   $("#modalMount").addEventListener("click", e => {
     const b = e.target.closest("[data-mode]"); if(!b) return;
-    closeModal(); importDoc(d, b.dataset.mode);
+    closeModal(); importDoc(d, b.dataset.mode, b.dataset.mode === "replace");
+  });
+}
+
+/* ── contributing back, and collecting it in ────────────── */
+function sendBackDialog(){
+  const added = addedSince();
+  openModal(`
+    <div class="modal">
+      <div class="modal-head"><div style="flex:1">
+        <h2>Send your additions back</h2>
+        <p>${ORIGIN && ORIGIN.by ? esc(ORIGIN.by) + " gathers everyone&rsquo;s" : "Send this back so it can be"}
+        ${added ? `merged in — you have added <b>${added}</b> ${added === 1 ? "person" : "people"} so far.`
+                : "merged in."}</p>
+      </div>
+      <button class="btn icon ghost" data-close aria-label="Close">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <label class="f"><span>Your name</span>
+          <input id="cbWho" placeholder="so they know whose additions these are" autocomplete="off"></label>
+        <label class="f" style="margin-top:10px"><span>Link to send back</span>
+          <input id="cbURL" readonly style="font-family:var(--f-mono);font-size:11px"></label>
+        <div style="display:flex;gap:7px;margin-top:9px;flex-wrap:wrap;align-items:center">
+          <button class="btn sm primary" id="cbCopy">Copy link</button>
+          <button class="btn sm" id="cbFile">Send as a file instead</button>
+          <span class="mono" id="cbSize" style="font-size:10.5px;color:var(--ink-3)"></span>
+        </div>
+        <div class="notice" style="background:var(--accent-tint);border-color:var(--accent-ring);color:var(--accent-2)">
+          It carries your whole copy, not just the new bits — that is fine.
+          Merging only adds people and fills in blanks, so nothing at the other end is overwritten.
+        </div>
+      </div>
+      <div class="modal-foot"><span class="spring"></span><button class="btn" data-close>Done</button></div>
+    </div>`);
+  let url = "";
+  const build = async () => {
+    url = await shareURL({photos:false, contributor:$("#cbWho").value.trim()});
+    $("#cbURL").value = url;
+    $("#cbSize").textContent = (url.length / 1024).toFixed(1) + " kB";
+  };
+  $("#cbWho").addEventListener("input", build);
+  $("#cbCopy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(url); toast("Copied — send it back"); }
+    catch(e){ $("#cbURL").select(); toast("Press Ctrl+C to copy", true); }
+  });
+  $("#cbFile").addEventListener("click", async () => {
+    const who = $("#cbWho").value.trim();
+    const meta = Object.assign({}, S.meta, {contributedBy:who});
+    const doc = JSON.stringify({app:"heirloom", version:1,
+                                data:{people:S.people, unions:S.unions, meta, seq:S.seq}}, null, 1);
+    const name = (who ? who.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-" : "") + "additions.json";
+    if(await offer(name, doc, "application/json")) toast("Saved — send them the file");
+  });
+  build();
+}
+
+/** Take in several relatives' copies at once and fold them all in. */
+function collectDialog(){
+  openModal(`
+    <div class="modal wide">
+      <div class="modal-head"><div style="flex:1">
+        <h2>Collect everyone&rsquo;s additions</h2>
+        <p>Drop in the links and files your family sent back. They are merged one
+        after another — nobody is duplicated, and nothing you already have is overwritten.</p>
+      </div>
+      <button class="btn icon ghost" data-close aria-label="Close">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <label class="f"><span>Paste links — one per line</span>
+          <textarea id="coText" style="min-height:104px;font-family:var(--f-mono);font-size:11px"
+            placeholder="https://…/#f=…"></textarea></label>
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn sm" id="coFiles">Choose files…</button>
+          <span class="mono" id="coFileList" style="font-size:10.5px;color:var(--ink-3)">no files chosen</span>
+        </div>
+        <div id="coReport"></div>
+      </div>
+      <div class="modal-foot">
+        <span class="spring"></span>
+        <button class="btn" data-close>Close</button>
+        <button class="btn primary" id="coGo">Merge them all</button>
+      </div>
+    </div>`);
+
+  let files = [];
+  $("#coFiles").addEventListener("click", () => {
+    const inp = document.createElement("input");
+    inp.type = "file"; inp.accept = ".json,application/json"; inp.multiple = true;
+    inp.addEventListener("change", () => {
+      files = Array.from(inp.files || []);
+      $("#coFileList").textContent = files.length
+        ? files.length + (files.length === 1 ? " file: " : " files: ") + files.map(f => f.name).join(", ")
+        : "no files chosen";
+    });
+    inp.click();
+  });
+
+  $("#coGo").addEventListener("click", async () => {
+    const sources = [];
+    for(const line of $("#coText").value.split(/\n+/)){
+      const t = line.trim(); if(!t) continue;
+      const d = await docFromLink(t);
+      sources.push(d ? {doc:d} : {error:"not an Heirloom link", label:t.slice(0, 34) + "…"});
+    }
+    for(const f of files){
+      try {
+        const j = JSON.parse(await f.text());
+        const d = j && j.data ? j.data : j;
+        sources.push(d && d.people ? {doc:d, label:f.name} : {error:"not a family file", label:f.name});
+      } catch(e){ sources.push({error:"could not be read", label:f.name}); }
+    }
+    if(!sources.length) return toast("Paste a link or choose a file first", true);
+
+    snapshot();
+    const rows = [];
+    for(const s of sources){
+      if(s.error){ rows.push({who:s.label || "—", error:s.error}); continue; }
+      const who = (s.doc.meta && (s.doc.meta.contributedBy || s.doc.meta.sharedBy))
+                || s.label || "someone";
+      rows.push({who, r:mergeDoc(normalise(s.doc))});
+    }
+    save(); render();
+    const total = rows.reduce((t, x) => t + (x.r ? x.r.added : 0), 0);
+    $("#coReport").innerHTML = `<fieldset><legend>What came in</legend>
+      <div class="sheettable"><table>
+        <thead><tr><th>From</th><th>Added</th><th>Already here</th><th>Blanks filled</th></tr></thead>
+        <tbody>${rows.map(x => x.error
+          ? `<tr><td><b>${esc(x.who)}</b></td><td colspan="3" style="color:var(--danger)">${esc(x.error)}</td></tr>`
+          : `<tr><td><b>${esc(x.who)}</b></td><td class="mono">${x.r.added}</td>
+             <td class="mono">${x.r.matched}</td><td class="mono">${x.r.filled}</td></tr>`).join("")}
+        </tbody></table></div></fieldset>`;
+    $("#coText").value = ""; files = []; $("#coFileList").textContent = "no files chosen";
+    toast(total ? total + (total === 1 ? " person added" : " people added") : "Nobody new — all already here");
   });
 }
 
@@ -4442,7 +4664,7 @@ function save(){
       localStorage.setItem(KEY, JSON.stringify({data:S, ui:{
         view:ui.view, mode:ui.mode, focus:ui.focus, style:ui.style,
         gens:ui.gens, softInlaw:ui.softInlaw, dates:ui.dates, isSample:ui.isSample
-      }}));
+      }, origin:ORIGIN}));
     } catch(e){
       toast("Browser storage is full — save a family file", true);
     }
@@ -4456,6 +4678,7 @@ function load(){
     if(!j || !j.data || !j.data.people) return false;
     S = normalise(j.data);
     Object.assign(ui, j.ui || {});
+    ORIGIN = j.origin || null;
     if(ui.focus && !P(ui.focus)) ui.focus = null;
     if(!CARD[ui.style]) ui.style = "standard";
     return Object.keys(S.people).length > 0;
@@ -4607,8 +4830,9 @@ $("#btnFocus").addEventListener("click", () => {
 $("#btnAdd").addEventListener("click", () => addFlow());
 $("#emptyAdd").addEventListener("click", () => addFlow());
 $("#emptySample").addEventListener("click", () => loadSample());
+$("#flagSend").addEventListener("click", sendBackDialog);
 $("#flagClear").addEventListener("click", () => {
-  snapshot(); S = blankDoc(); ui.isSample = false; ui.sel = null; ui.focus = null;
+  snapshot(); S = blankDoc(); ORIGIN = null; ui.isSample = false; ui.sel = null; ui.focus = null;
   commit("Cleared — the chart is yours now");
 });
 function addFlow(){
@@ -4830,6 +5054,7 @@ function loadSample(){
   S.meta = {title:"The Deshmukh Family", subtitle:"Four generations, 1918–2024",
             note:"Compiled for the Diwali gathering"};
   printOpts.title = S.meta.title; printOpts.subtitle = S.meta.subtitle; printOpts.note = S.meta.note;
+  ORIGIN = null;
   ui.isSample = true; ui.focus = hari; ui.sel = null; ui.mode = "desc";
   setView(ui.view || "chart");
   setMode("desc");

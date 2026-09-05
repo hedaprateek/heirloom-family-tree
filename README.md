@@ -94,6 +94,12 @@ Panels are grouped by birth family, so two sisters who married two brothers
 share one. If an in-law's parents *are* already on the main chart, no panel is
 made — the tie is drawn there instead.
 
+On the **main chart** the parents are named under the in-law's card in the
+register's own shorthand — `d/o Govind & Sarala Joshi`, `s/o Iqbal & Farida
+Sheikh` — so you can see where someone came from without leaving the tree.
+Parents who share a surname share it in the line. It appears only where those
+parents are not already drawn.
+
 **People who married in** are drawn a step back — smaller, lighter type, no
 generation stripe — so the line of descent reads first and the in-laws stay
 legible without competing with it. Who counts as married-in is worked out from
@@ -165,17 +171,39 @@ Reading and writing `.xlsx` is done in the page itself — the format is a zip o
 XML, and the browser already has deflate and an XML parser — so there is no
 library to load and it works offline.
 
-## Sharing it with the family
+## Gathering it from the whole family
 
 **Share** puts the whole tree into one link — the data rides in the URL's
 fragment, so it never reaches any server. No account, no backend, nothing to
-run. Send it by message, or print its QR code on the poster.
+run. Put your name on it, send it by message, or print its QR code on the
+poster.
 
-Anyone who opens the link gets **their own copy** to explore and add to. There
-is no shared server, so nobody is editing the same thing. When a relative has
-added people, ask for their link or file back and use **File ▸ Merge** — it
-matches on name and birth year, adds anyone new, fills in blanks you left, and
-does not duplicate people you both have.
+There is no shared server, so nobody edits the same copy — everyone gets their
+own. The round trip is built for that:
+
+1. **You share.** One link to as many relatives as you like.
+2. **They add what they know.** Their copy shows a banner — *"Prateek shared
+   this with you · you have added 4 people"* — with a **Send my additions
+   back** button. That hands them a link (or a file, for a big tree) tagged
+   with their name.
+3. **You collect.** **File ▸ Collect everyone's additions** takes a whole
+   batch at once: paste all the links one per line, pick several files, or
+   both. Each is merged in turn and you get a table of what each person
+   contributed.
+
+| From | Added | Already here | Blanks filled |
+|---|---|---|---|
+| Meera | 2 | 3 | 0 |
+| Anil | 1 | 4 | 2 |
+
+Merging **only ever adds**. People are matched on name and birth year, so
+nobody is duplicated, blanks you left are filled from whoever knew them, and
+nothing you already have is overwritten. Send the same link out again after
+collecting and everyone gets the combined tree.
+
+If you would rather everyone typed into one place, a spreadsheet works too —
+see above — or say the word and we can talk about what a real shared backend
+would take.
 
 ## Your data
 
