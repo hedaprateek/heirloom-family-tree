@@ -797,7 +797,8 @@ const KEY = "heirloom.v1";
 let S = blankDoc();
 let ui = {
   view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
-  softInlaw:true, dates:"year", z:1, tx:0, ty:0, query:"", isSample:false, dirty:false
+  softInlaw:true, dates:"year", treeStyle:"canopy",
+  z:1, tx:0, ty:0, query:"", isSample:false, dirty:false
 };
 let LAY = null;                 // last computed layout
 let INLAW = {};                 // pid -> true for people who married in
@@ -1832,7 +1833,197 @@ function rng(seed){
   return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
 }
 
+/** Two shapes: the grown crown, and the tidy generational one. */
 function treeView(pal){
+  return ui.treeStyle === "rows" ? treeRowsView(pal) : treeCanopyView(pal);
+}
+
+function treeRowsView(pal){
+  /* three densities, driven by the same card-detail button as the chart */
+  const showYear  = ui.style !== "compact";
+  const showPhoto = ui.style === "portrait";
+  const PILL_H = showPhoto ? 54 : (showYear ? 44 : 32);
+  const PHOTO  = PILL_H - 16;
+  const ROW    = PILL_H + (showPhoto ? 116 : 108);
+
+  const gaps = {gapSpouse:30, gapSib:22, gapGroup:34};
+  const nameOf = pid => fullName(P(pid));
+  const sizeOf = pid => softly(pid) ? NSZ - 1.5 : NSZ;
+  const pw = {};
+  function personW(pid){
+    if(pw[pid] != null) return pw[pid];
+    const p = P(pid);
+    let w = measure(nameOf(pid), sizeOf(pid), "ui", softly(pid) ? 500 : 600);
+    if(showYear) w = Math.max(w, measure(lifeLine(p), YSZ, "mono"));
+    w += 22;
+    if(showPhoto) w += PHOTO + 8;
+    return (pw[pid] = Math.max(64, Math.min(300, w)));
+  }
+
+  const base = layout(Object.assign({C:{w:150, h:PILL_H, photo:false}, W:personW}, gaps));
+  if(!base) return null;
+  const idx = buildIndex();
+  const pos = {}; base.nodes.forEach(n => { pos[n.pid] = n; });
+  const maxD = base.nodes.reduce((m, n) => Math.max(m, n.depth), 0);
+  const rowY = d => (maxD - d) * ROW;
+
+  const mate = {};
+  for(const b of base.bands){
+    const u = U(b.uid);
+    if(!u || !u.a || !u.b || !pos[u.a] || !pos[u.b]) continue;
+    (mate[u.a] = mate[u.a] || []).push({pid:u.b, u});
+    (mate[u.b] = mate[u.b] || []).push({pid:u.a, u});
+  }
+
+  /* one pill per person and whoever they married — the hub of a
+     remarriage claims its cell first, so nobody is drawn twice.
+     The pill spans exactly the width the layout already reserved. */
+  const cellOf = {}, cells = [];
+  const order = base.nodes.slice().sort((a, b) =>
+    ((mate[b.pid] || []).length - (mate[a.pid] || []).length) || (a.x - b.x));
+  for(const n of order){
+    if(cellOf[n.pid]) continue;
+    const members = [n.pid];
+    for(const m of (mate[n.pid] || [])) if(!cellOf[m.pid]) members.push(m.pid);
+    members.sort((p, q) => pos[p].x - pos[q].x);
+    const left  = Math.min.apply(null, members.map(p => pos[p].x));
+    const right = Math.max.apply(null, members.map(p => pos[p].x + personW(p)));
+    const cell = {members, depth:n.depth, y:rowY(n.depth), h:PILL_H,
+                  w:right - left, x:(left + right) / 2, left};
+    members.forEach(p => { cellOf[p] = cell; });
+    cells.push(cell);
+  }
+
+  const dcount = {};
+  function desc(pid){
+    if(dcount[pid] != null) return dcount[pid];
+    dcount[pid] = 0;                               // also guards against a data loop
+    let n = 0;
+    for(const uid of idx[pid].unions)
+      for(const k of (U(uid).children || [])) if(S.people[k]) n += 1 + desc(k);
+    dcount[pid] = n;
+    return n;
+  }
+  const weight = c => clamp(6.5 + Math.sqrt(Math.max.apply(null, c.members.map(desc))) * 4.6, 6.5, 50);
+
+  const edges = [], hasKids = new Set();
+  for(const uid in S.unions){
+    const u = S.unions[uid];
+    const src = cellOf[u.a] || cellOf[u.b];
+    if(!src) continue;
+    for(const k of (u.children || [])){
+      const dst = cellOf[k];
+      if(dst && dst !== src && dst.depth > src.depth){ edges.push({src, dst}); hasKids.add(src); }
+    }
+  }
+
+  const dl = [], hits = [];
+  const GREENS = [pal.accent, mix(pal.accent, pal.ink, .22), mix(pal.accent, pal.card, .3)];
+  /** a handful of leaves fanned around a point */
+  function foliage(cx, cy, seed, count, big){
+    const r = rng(seed);
+    for(let i = 0; i < count; i++){
+      const a  = -112 + r() * 224;               // scattered, not fanned
+      const rad = (big ? 10 : 7) + r() * r() * (big ? 34 : 17);
+      const L  = (big ? 16 : 11) + r() * (big ? 15 : 8);
+      const px = cx + Math.cos((a - 90) * Math.PI/180) * rad;
+      const py = cy + Math.sin((a - 90) * Math.PI/180) * rad * .78;
+      dl.push({t:"path", d:almond(px, py, L, L * .46), fill:GREENS[i % 3],
+               alpha:.3 + r() * .3, rot:a, rx:px, ry:py});
+    }
+  }
+
+  if(ui.gens){                                    // faint generation guides
+    const gx0 = Math.min.apply(null, cells.map(c => c.x - c.w/2)) - 30;
+    const gx1 = Math.max.apply(null, cells.map(c => c.x + c.w/2)) + 30;
+    for(let d = 0; d <= maxD; d++){
+      const gy = rowY(d) + PILL_H/2 + ROW * 0.30;
+      dl.push({t:"path", d:`M${r1(gx0)} ${r1(gy)} H${r1(gx1)}`, stroke:pal.line,
+               sw:1, dash:"1 6", cap:"round", alpha:.55});
+      dl.push({t:"text", x:gx0 - 12, y:rowY(d) + 4, s:roman(d + 1), size:10, fam:"mono",
+               fill:pal.ink3, anchor:"end", ls:"1.8px"});
+    }
+  }
+
+  for(const c of cells.filter(c => c.depth === 0)){          // trunk, roots, ground
+    const w = weight(c) * 1.35, gy = c.y + ROW * 0.55;
+    dl.push({t:"path", d:taper(c.x, c.y + c.h/2 - 2, c.x, gy, w, w * 1.6), fill:pal.bark, alpha:.95});
+    for(const k of [-1, 1]){
+      dl.push({t:"path", stroke:pal.bark, sw:Math.max(2.5, w * 0.36), cap:"round", alpha:.55,
+               d:`M${r1(c.x)} ${r1(gy - 8)} Q${r1(c.x + k * w * 1.8)} ${r1(gy + 8)} ${r1(c.x + k * (w * 3 + 26))} ${r1(gy + 17)}`});
+      dl.push({t:"path", stroke:pal.bark, sw:Math.max(1.6, w * 0.2), cap:"round", alpha:.35,
+               d:`M${r1(c.x)} ${r1(gy - 4)} Q${r1(c.x + k * w * 1.1)} ${r1(gy + 12)} ${r1(c.x + k * (w * 1.7 + 12))} ${r1(gy + 21)}`});
+    }
+    dl.push({t:"path", stroke:pal.line2, sw:1.3, cap:"round", alpha:.5,
+             d:`M${r1(c.x - w * 4.6 - 34)} ${r1(gy + 20)} H${r1(c.x + w * 4.6 + 34)}`});
+  }
+
+  for(const e of edges){                           // branches, each bending its own way
+    const w = weight(e.dst);
+    const r = rng(hash32(e.dst.members[0] + "b"));
+    const dx = e.dst.x - e.src.x;
+    dl.push({t:"path", fill:pal.bark, alpha:.92,
+             d:taper(e.src.x, e.src.y - e.src.h/2 + 2, e.dst.x, e.dst.y + e.dst.h/2 - 2,
+                     w * 1.2, w * 0.8, .30 + r() * .16, .68 + r() * .14, dx * (.10 + r() * .16))});
+    if(!hasKids.has(e.dst))                        // a little growth along the way
+      foliage(e.dst.x - dx * .12, e.dst.y + e.dst.h/2 + 26, hash32(e.dst.members[0] + "m"), 3, false);
+  }
+  for(const c of cells)                            // new growth at the tips
+    if(!hasKids.has(c)) foliage(c.x, c.y - c.h/2 - 15, hash32(c.members[0]), 7, true);
+
+  for(const c of cells){
+    dl.push({t:"rect", x:c.x - c.w/2, y:c.y - c.h/2 + 2.5, w:c.w, h:c.h, r:PILL_H/2.6,
+             fill:pal.line2, alpha:.28});                       // the pill's own shadow
+    dl.push({t:"rect", x:c.x - c.w/2, y:c.y - c.h/2, w:c.w, h:c.h, r:PILL_H/2.6,
+             fill:pal.card, stroke:pal.line2, sw:1});
+    c.members.forEach((pid, i) => {
+      const p = P(pid), nx = pos[pid].x, nw = personW(pid);
+      if(i){                                                     // union glyph in the gap
+        const prev = c.members[i-1];
+        const rel = (mate[prev] || []).find(m => m.pid === pid);
+        const u = rel && rel.u;
+        const gx = (pos[prev].x + personW(prev) + nx) / 2;
+        dl.push({t:"text", x:gx, y:c.y + 4.5, anchor:"middle", size:SSZ, fill:pal.brass,
+                 s:u && u.divorced ? "⚮" : (u && u.status === "partners" ? "◇" : "⚭")});
+      }
+      let tx = nx + 11, tw = nw - 22;
+      if(showPhoto){
+        const r = PHOTO/2, cx = nx + 8 + r;
+        if(p.photo) dl.push({t:"image", pid, href:p.photo, x:nx + 8, y:c.y - r, w:PHOTO, h:PHOTO,
+                             clip:{cx, cy:c.y, r}});
+        else {
+          dl.push({t:"circle", cx, cy:c.y, r, fill:mix(pal.card, pal.accent, .18)});
+          dl.push({t:"text", x:cx, y:c.y + 5, s:initials(p), size:Math.round(r * .85),
+                   weight:600, fill:pal.ink2, anchor:"middle"});
+        }
+        dl.push({t:"circle", cx, cy:c.y, r, stroke:pal.line2, sw:1});
+        tx = nx + 8 + PHOTO + 9; tw = nw - (tx - nx) - 10;
+      }
+      const yr = showYear ? lifeLine(p) : "";
+      const soft = softly(pid), nsz = sizeOf(pid), wt = soft ? 500 : 600;
+      dl.push({t:"text", x:tx, y:c.y + (yr ? -2 : 4.5), s:fitTo(nameOf(pid), tw, nsz, "ui", wt),
+               size:nsz, weight:wt, fill:soft ? pal.ink2 : pal.ink});
+      if(yr) dl.push({t:"text", x:tx, y:c.y + 14, s:yr, size:YSZ, fam:"mono",
+                      fill:soft ? pal.ink3 : pal.ink2});
+      const sire = (pos[pid] || {}).sire;
+      if(sire) dl.push({t:"text", x:nx + nw/2, y:c.y + c.h/2 + 14, anchor:"middle",
+                        s:fitTo(sire, nw + 44, 9.5, "ui"), size:9.5, fill:pal.ink3});
+      hits.push({pid, x:nx - 3, y:c.y - c.h/2, w:nw + 6, h:c.h, depth:c.depth});
+    });
+  }
+
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for(const c of cells){
+    x0 = Math.min(x0, c.x - c.w/2); x1 = Math.max(x1, c.x + c.w/2);
+    y0 = Math.min(y0, c.y - c.h/2 - 64); y1 = Math.max(y1, c.y + c.h/2);
+  }
+  if(ui.gens) x0 -= 56;
+  y1 += ROW * 0.55 + 30;
+  return {kind:"tree", dl, hits, nodes:hits, rows:base.rows, ancestors:base.ancestors,
+          box:{x:x0 - PAD, y:y0 - PAD, w:(x1 - x0) + PAD*2, h:(y1 - y0) + PAD*2}};
+}
+
+function treeCanopyView(pal){
   /* three densities, driven by the same card-detail button as the chart */
   const showYear  = ui.style !== "compact";
   const showPhoto = ui.style === "portrait";
@@ -1924,7 +2115,7 @@ function treeView(pal){
       for(const k of (U(uid).children || [])) if(S.people[k]) n += 1 + descOf(k);
     return (grown[pid] = n);
   }
-  const limbW = c => clamp(4.5 + Math.sqrt(Math.max.apply(null, c.members.map(descOf))) * 3.4, 4.5, 36);
+  const limbW = c => clamp(8 + Math.sqrt(Math.max.apply(null, c.members.map(descOf))) * 5.4, 8, 62);
 
   /* Grow one tree: the crown opens into a fan, and each ring is pushed out
      until the labels on it stop touching. */
@@ -1984,6 +2175,9 @@ function treeView(pal){
     const p = c.parent;
     const px = p.x, py = p.y, cx = c.x, cy = c.y;
     const L = Math.hypot(cx - px, cy - py);
+    /* a short limb carrying a wide line would bulge into a blob */
+    const cap = Math.max(6, L * 0.6);
+    w1 = Math.min(w1, cap); w2 = Math.min(w2, cap);
     const pd = p.parent ? p.ang : -90;
     const k1 = L * 0.46, k2 = L * 0.34;
     const c1 = [px + Math.cos(pd * RAD) * k1, py + Math.sin(pd * RAD) * k1];
@@ -2025,8 +2219,8 @@ function treeView(pal){
   for(const all of trees){
     const root = all[0];
     const trunkTop = root.y + TAG_H/2 - 2;
-    const ground = trunkTop + RING * 0.72;
-    const tw = limbW(root) * 1.4;
+    const ground = trunkTop + RING * 0.82;
+    const tw = limbW(root) * 1.75;
 
     dl.push({t:"path", fill:pal.bark, alpha:.95,
              d:taper(root.x, trunkTop, root.x, ground, tw, tw * 1.7)});
@@ -3551,7 +3745,8 @@ async function offer(filename, data, mime){
 function slug(){
   const base = (printOpts.title || guessTitle())
     .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "family-tree";
-  return ui.view === "chart" ? base : base + "-" + ui.view;
+  if(ui.view === "chart") return base;
+  return base + "-" + ui.view + (ui.view === "tree" && ui.treeStyle === "rows" ? "-generations" : "");
 }
 async function exportPNG(){
   const plan = planSheets();
@@ -4750,7 +4945,8 @@ function save(){
     try {
       localStorage.setItem(KEY, JSON.stringify({data:S, ui:{
         view:ui.view, mode:ui.mode, focus:ui.focus, style:ui.style,
-        gens:ui.gens, softInlaw:ui.softInlaw, dates:ui.dates, isSample:ui.isSample
+        gens:ui.gens, softInlaw:ui.softInlaw, dates:ui.dates,
+        treeStyle:ui.treeStyle, isSample:ui.isSample
       }, origin:ORIGIN}));
     } catch(e){
       toast("Browser storage is full — save a family file", true);
@@ -4881,15 +5077,20 @@ function setView(v){
   if(!VIEWS[v]) v = "chart";
   ui.view = v;
   for(const k in VIEWS) $("#" + VIEWS[k]).setAttribute("aria-pressed", k === v);
-  /* card detail applies to the chart and the tree; generation bands are
-     drawn on the chart only — the tree marks generations by how far out
-     a branch has reached */
+  /* card detail applies to the chart and both trees; generation bands mean
+     nothing in the grown tree, which marks generations by how far a branch
+     has reached */
   const styled = v === "chart" || v === "tree";
+  const banded = v === "chart" || (v === "tree" && ui.treeStyle === "rows");
   $("#tPhoto").disabled = !styled;
-  $("#tGens").disabled  = v !== "chart";
+  $("#tGens").disabled  = !banded;
   $("#tPhoto").style.opacity = styled ? "" : ".35";
-  $("#tGens").style.opacity  = v === "chart" ? "" : ".35";
+  $("#tGens").style.opacity  = banded ? "" : ".35";
   $(".legend").style.display = v === "chart" ? "" : "none";
+  $("#vTree").title = v === "tree"
+    ? (ui.treeStyle === "canopy" ? "Tree — click again for the generational layout"
+                                 : "Tree — click again for the grown tree")
+    : "Tree — a grown tree, or tidy generations";
   save();
 }
 function setMode(m){
@@ -4907,9 +5108,17 @@ function setMode(m){
   }
   save();
 }
+const TREE_SHAPE = {canopy:"Tree — grown", rows:"Tree — generations"};
 for(const k in VIEWS)
   $("#" + VIEWS[k]).addEventListener("click", () => {
-    setView(k); render(); fitView(); toast(VIEW_NAME[k]);
+    /* clicking Tree while it is already showing switches between its two shapes */
+    if(k === "tree" && ui.view === "tree"){
+      ui.treeStyle = ui.treeStyle === "canopy" ? "rows" : "canopy";
+      setView("tree"); render(); fitView();
+      return toast(TREE_SHAPE[ui.treeStyle]);
+    }
+    setView(k); render(); fitView();
+    toast(k === "tree" ? TREE_SHAPE[ui.treeStyle] : VIEW_NAME[k]);
   });
 $("#scope").addEventListener("change", e => { setMode(e.target.value); render(); fitView(); });
 $("#btnFocus").addEventListener("click", () => {
@@ -5007,7 +5216,7 @@ function helpDialog(){
       <fieldset><legend>The six views</legend>
         <div class="keys" style="line-height:1.5">
           <span class="k"><b>Chart</b></span><span>The full record — photos, dates, places, every link.</span>
-          <span class="k"><b>Tree</b></span><span>An actual tree — trunk, forking branches, a crown. Limbs thicken with the size of each line.</span>
+          <span class="k"><b>Tree</b></span><span>An actual tree — trunk, forking branches, a crown. <b>Click Tree again</b> for the tidy generational shape. Limbs thicken with the size of each line.</span>
           <span class="k"><b>Fan</b></span><span>Generations as rings. Best poster for a deep family.</span>
           <span class="k"><b>Timeline</b></span><span>One bar per life, so you can see who overlapped whom.</span>
           <span class="k"><b>Register</b></span><span>A numbered list to hand round — 1.2.1 places anyone without a chart.</span>
@@ -5162,8 +5371,11 @@ function loadSample(){
   const had = load();
   /* ?view=tree — so a link can open straight into the picture you meant */
   try {
-    const want = new URLSearchParams(location.search).get("view");
+    const q = new URLSearchParams(location.search);
+    const want = q.get("view");
     if(want && VIEWS[want]) ui.view = want;
+    const shape = q.get("shape");
+    if(shape === "rows" || shape === "canopy") ui.treeStyle = shape;
   } catch(e){}
 
   if(!had) loadSample();

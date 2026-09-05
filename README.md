@@ -26,13 +26,14 @@ Scope it to the **descendants** of a chosen person, their **ancestors**, or
 ## Six views of the same family
 
 Switch with the buttons in the top bar or the <kbd>1</kbd>–<kbd>6</kbd> keys.
-All five print and export identically, so pick the picture you want and hit
-Print. A link can also open straight into one: `?view=tree`.
+All of them print and export identically, so pick the picture you want and hit
+Print. A link can open straight into one: `?view=tree`, and the tree's shape
+too: `?view=tree&shape=rows`.
 
 | View | What it's for |
 |---|---|
 | **Chart** | The full record — photos, dates, places, occupations, every link. |
-| **Tree** | An actual tree. A trunk at the foot, branches forking and splaying up into a crown, foliage at the growing tips, names riding on the wood. Each limb thickens in proportion to how many descendants that line carries. The card-detail button adds years, then photos. |
+| **Tree** | An actual tree — trunk at the foot, branches forking up into a crown, foliage at the growing tips, names on the wood. Comes in **two shapes**: *grown*, which splays into a canopy, and *generations*, which keeps the same tree on tidy rows. Click **Tree** again to switch. Limbs thicken in proportion to how many descendants that line carries. The card-detail button adds years, then photos. |
 | **Fan** | Generations as concentric rings, each slice sized by how much of the family sits behind that person. The best poster for a deep family. |
 | **Timeline** | One bar per life across the years, grouped by generation, with brass ties marking the year two people married. Shows at a glance who overlapped whom. |
 | **Register** | A numbered list to hand round the table, using d'Aboville numbering — `1.2.1` places anyone exactly without needing the chart. |
