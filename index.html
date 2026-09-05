@@ -306,6 +306,13 @@ label.f input:focus,label.f select:focus,label.f textarea:focus{
 }
 label.f textarea{resize:vertical;min-height:60px;line-height:1.5}
 label.f .hint{font-size:10.5px;color:var(--ink-3);margin-top:3px;font-family:var(--f-mono)}
+/* one-tap headings built from the family's own name */
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.chip{
+  padding:3px 9px;border-radius:999px;border:1px solid var(--line);
+  background:var(--panel-2);font-size:11px;color:var(--ink-2);line-height:1.5;
+}
+.chip:hover{border-color:var(--accent-ring);color:var(--accent-2);background:var(--accent-tint)}
 
 .rel{display:flex;flex-direction:column;gap:5px}
 .rel-item{
@@ -562,17 +569,33 @@ kbd{
 .only-narrow{display:none}
 @media (max-width:1000px){
   #app,#app.insp-open,#app.rail-hidden{grid-template-columns:minmax(0,1fr);grid-template-areas:"bar" "stage"}
+  /* A closed drawer must be fully gone: off-screen alone still casts its
+     shadow across the stage and still swallows taps at the edge. */
   .rail,.insp{
     position:fixed;top:54px;bottom:0;width:min(88vw,320px);z-index:40;
-    box-shadow:0 0 40px -8px var(--shade);
+    box-shadow:none;visibility:hidden;pointer-events:none;
+    transition:transform .22s cubic-bezier(.2,.7,.3,1),box-shadow .22s,visibility 0s .22s;
   }
-  .rail{left:0;transform:translateX(-101%);transition:transform .22s cubic-bezier(.2,.7,.3,1)}
-  .insp{right:0;transform:translateX(101%);transition:transform .22s cubic-bezier(.2,.7,.3,1)}
-  #app:not(.rail-hidden) .rail{transform:none}
-  #app.insp-open .insp{transform:none}
+  .rail{left:0;transform:translateX(-101%)}
+  .insp{right:0;transform:translateX(101%)}
+  #app:not(.rail-hidden) .rail,
+  #app.insp-open .insp{
+    transform:none;visibility:visible;pointer-events:auto;
+    box-shadow:0 0 40px -8px var(--shade);
+    transition:transform .22s cubic-bezier(.2,.7,.3,1),box-shadow .22s,visibility 0s;
+  }
+  #drawerScrim{display:block}
+  #app:not(.rail-hidden) ~ #drawerScrim,
+  #app.insp-open ~ #drawerScrim{opacity:1;pointer-events:auto}
   .only-narrow{display:inline-flex}
   .hide-narrow{display:none !important}
   .legend,.credit{display:none}
+}
+/* tap anywhere off a drawer to shut it */
+#drawerScrim{
+  display:none;position:fixed;inset:54px 0 0;z-index:38;
+  background:color-mix(in srgb,var(--paper-2) 58%,transparent);
+  opacity:0;pointer-events:none;transition:opacity .2s;
 }
 </style>
 </head>
@@ -740,6 +763,8 @@ kbd{
   </aside>
 </div>
 
+<div id="drawerScrim"></div>
+
 <!-- ── modals ────────────────────────────────────────────── -->
 <div class="scrim" id="scrim" hidden><div id="modalMount"></div></div>
 <div id="toasts" aria-live="polite"></div>
@@ -758,9 +783,25 @@ kbd{
 /* ── constants ─────────────────────────────────────────── */
 const CARD = {
   compact : {w:172, h:50,  photo:false},
-  standard: {w:194, h:74,  photo:false},
-  portrait: {w:206, h:92,  photo:true }
+  standard: {w:194, h:82,  photo:false},   // room for née, dates AND place · work
+  portrait: {w:210, h:98,  photo:true }
 };
+const CARD_LH = 15.5;
+/** The lines a card carries, at the current detail level. */
+function cardRows(p, C, tw, soft){
+  const nsz = soft ? 11.5 : 13;
+  const rows = [{cls:"nm", size:nsz, s:fit(fullName(p), tw, nsz, CW.nm), soft}];
+  const life = lifeLine(p);
+  if(C.h >= 74){
+    if(p.maiden) rows.push({cls:"nm-sm", size:10.5, s:fit("née " + p.maiden, tw, 10.5, CW.sm)});
+    if(life)     rows.push({cls:"dt", size:10.5, s:fit(life, tw, 10.5, CW.mono)});
+    const meta = [p.place, p.occupation].filter(Boolean).join(" · ");
+    if(meta)     rows.push({cls:"mt", size:10, s:fit(meta, tw, 10, CW.mt)});
+  } else if(life){
+    rows.push({cls:"dt", size:10.5, s:fit(life, tw, 10.5, CW.mono)});
+  }
+  return rows;
+}
 const GAP_SPOUSE = 40;   // room for the union band
 const GAP_SIB    = 26;   // between sibling subtrees
 const GAP_GROUP  = 44;   // between child groups of different unions
@@ -1357,24 +1398,13 @@ function cardSVG(n, model, opts){
     tx = 12 + s + 12; tw = C.w - tx - 10;
   }
 
-  const name = fullName(p);
-  const life = lifeLine(p);
-  const nsz = soft ? 11.5 : 13;
-  const nst = soft ? ` style="font-size:11.5px;font-weight:500"` : "";
-  if(C.h >= 74){
-    g += `<text class="nm" x="${tx}" y="${C.photo ? 30 : 25}"${nst}>${esc(fit(name, tw, nsz, CW.nm))}</text>`;
-    let cy = C.photo ? 47 : 43;
-    if(p.maiden){
-      g += `<text class="nm-sm" x="${tx}" y="${cy}">${esc(fit("née " + p.maiden, tw, 10.5, CW.sm))}</text>`;
-      cy += 15;
-    }
-    if(life){ g += `<text class="dt" x="${tx}" y="${cy}">${esc(life)}</text>`; cy += 15; }
-    const meta = [p.place, p.occupation].filter(Boolean).join(" · ");
-    if(meta && cy <= C.h - 6)
-      g += `<text class="mt" x="${tx}" y="${cy}">${esc(fit(meta, tw, 10, CW.mt))}</text>`;
-  } else {
-    g += `<text class="nm" x="${tx}" y="20"${nst}>${esc(fit(name, tw, nsz, CW.nm))}</text>`;
-    if(life) g += `<text class="dt" x="${tx}" y="37">${esc(life)}</text>`;
+  /* the block is centred, so a card never runs out of room and drops a line */
+  const rows = cardRows(p, C, tw, soft);
+  let ty = (C.h - rows.length * CARD_LH) / 2 + 11.5;
+  for(const r of rows){
+    const st = (r.cls === "nm" && soft) ? ` style="font-size:11.5px;font-weight:500"` : "";
+    g += `<text class="${r.cls}" x="${tx}" y="${r1(ty)}"${st}>${esc(r.s)}</text>`;
+    ty += CARD_LH;
   }
   if(n.sire)
     g += `<text class="sire" x="${C.w / 2}" y="${C.h + 14}" text-anchor="middle">`
@@ -1585,35 +1615,21 @@ function renderCanvas(model, scale, palIn, title){
       tx = 12 + s + 12; tw = C.w - tx - 10;
     }
 
-    const life = lifeLine(p);
-    const nsz = soft ? 11.5 : 13;
-    const nfont = (soft ? "500 11.5px " : "600 13px ") + FAM.ui;
     const nink = soft ? pal.ink2 : pal.ink;
     const sub  = soft ? pal.ink3 : pal.ink2;
-    if(C.h >= 74){
-      x.fillStyle = nink; x.font = nfont;
-      x.fillText(fit(fullName(p), tw, nsz, CW.nm), tx, C.photo ? 30 : 25);
-      let cy = C.photo ? 47 : 43;
-      if(p.maiden){
-        x.fillStyle = sub; x.font = 'italic 400 10.5px ' + FAM.ui;
-        x.fillText(fit("née " + p.maiden, tw, 10.5, CW.sm), tx, cy); cy += 15;
-      }
-      if(life){
-        x.fillStyle = sub; x.font = '400 10.5px ' + FAM.mono;
-        x.fillText(life, tx, cy); cy += 15;
-      }
-      const meta = [p.place, p.occupation].filter(Boolean).join(" · ");
-      if(meta && cy <= C.h - 6){
-        x.fillStyle = pal.ink3; x.font = '400 10px ' + FAM.ui;
-        x.fillText(fit(meta, tw, 10, CW.mt), tx, cy);
-      }
-    } else {
-      x.fillStyle = nink; x.font = nfont;
-      x.fillText(fit(fullName(p), tw, nsz, CW.nm), tx, 20);
-      if(life){
-        x.fillStyle = sub; x.font = '400 10.5px ' + FAM.mono;
-        x.fillText(life, tx, 37);
-      }
+    const FONTS = {
+      nm:    [(soft ? "500 11.5px " : "600 13px ") + FAM.ui, nink],
+      "nm-sm":['italic 400 10.5px ' + FAM.ui, sub],
+      dt:    ['400 10.5px ' + FAM.mono, sub],
+      mt:    ['400 10px ' + FAM.ui, pal.ink3]
+    };
+    const rows = cardRows(p, C, tw, soft);
+    let ty = (C.h - rows.length * CARD_LH) / 2 + 11.5;
+    for(const r of rows){
+      const [font, fill] = FONTS[r.cls];
+      x.font = font; x.fillStyle = fill;
+      x.fillText(r.s, tx, ty);
+      ty += CARD_LH;
     }
     if(n.sire){
       x.fillStyle = pal.ink3; x.font = '400 9.5px ' + FAM.ui;
@@ -2907,7 +2923,7 @@ function renderInspector(){
         <input data-fld="birth" value="${esc(p.birth)}" placeholder="12 Mar 1948" autocomplete="off">
         <span class="hint" data-echo="birth">${esc(dateEcho(p.birth))}</span></label>
       <label class="f"><span>Date of death</span>
-        <input data-fld="death" value="${esc(p.death)}" placeholder="1994" autocomplete="off">
+        <input data-fld="death" value="${esc(p.death)}" autocomplete="off">
         <span class="hint" data-echo="death">${esc(dateEcho(p.death))}</span></label>
     </div>
     <div class="fgrid" style="margin-top:9px">
@@ -3039,6 +3055,12 @@ function scheduleRedraw(){
   clearTimeout(redrawTimer);
   redrawTimer = setTimeout(() => { drawChart(); renderRail(); }, 180);
 }
+/* leaving a field, or picking from a dropdown, redraws at once */
+$("#inspBody").addEventListener("change", e => {
+  if(!e.target.dataset.fld || !ui.sel) return;
+  clearTimeout(redrawTimer);
+  drawChart(); renderRail();
+});
 $("#inspBody").addEventListener("click", e => {
   const btn = e.target.closest("[data-act]"); if(!btn) return;
   const act = btn.dataset.act;
@@ -3328,11 +3350,10 @@ function paperFill(){ return TINTS[printOpts.tint] || "#FFFFFF"; }
 function printDialog(){
   if(!LAY){ return toast("Nothing to print yet", true); }
   printOpts.qrUrl = "";                 // the family may have changed since last time
-  if(!printOpts.title){
-    printOpts.title = S.meta.title || guessTitle();
-    printOpts.subtitle = S.meta.subtitle || guessSubtitle();
-    printOpts.note = S.meta.note || "";
-  }
+  /* always re-derive: an untouched heading follows whoever is on the chart now */
+  printOpts.title    = S.meta.title    || guessTitle();
+  printOpts.subtitle = S.meta.subtitle || guessSubtitle();
+  printOpts.note     = S.meta.note     || "";
   openModal(`
     <div class="modal wide">
       <div class="modal-head"><div style="flex:1">
@@ -3405,9 +3426,13 @@ function printDialog(){
 
           <fieldset><legend>Heading</legend>
             <div class="fgrid">
-              <label class="f"><span>Title</span><input id="pTitle" value="${esc(printOpts.title)}" placeholder="The Deshmukh Family"></label>
-              <label class="f"><span>Subtitle</span><input id="pSub" value="${esc(printOpts.subtitle)}" placeholder="Four generations, 1918–2024"></label>
-              <label class="f"><span>Footer line</span><input id="pNote" value="${esc(printOpts.note)}" placeholder="Compiled for the Diwali gathering, 2026"></label>
+              <label class="f"><span>Title</span><input id="pTitle" value="${esc(printOpts.title)}">
+                <span class="chips">${titleIdeas().map(t =>
+                  `<button class="chip" data-fill="pTitle">${esc(t)}</button>`).join("")}</span></label>
+              <label class="f"><span>Subtitle</span><input id="pSub" value="${esc(printOpts.subtitle)}">
+                <span class="chips">${subtitleIdeas().map(t =>
+                  `<button class="chip" data-fill="pSub">${esc(t)}</button>`).join("")}</span></label>
+              <label class="f"><span>Footer line</span><input id="pNote" value="${esc(printOpts.note)}"></label>
             </div>
           </fieldset>
         </div>
@@ -3465,7 +3490,13 @@ function printDialog(){
     printOpts.title   = $("#pTitle").value;
     printOpts.subtitle= $("#pSub").value;
     printOpts.note    = $("#pNote").value;
-    S.meta = {title:printOpts.title, subtitle:printOpts.subtitle, note:printOpts.note};
+    /* a heading left at its suggestion is not stored, so it keeps following
+       the family rather than freezing on whoever was loaded first */
+    S.meta = Object.assign({}, S.meta, {
+      title:    printOpts.title    === guessTitle()    ? "" : printOpts.title,
+      subtitle: printOpts.subtitle === guessSubtitle() ? "" : printOpts.subtitle,
+      note:     printOpts.note
+    });
     save();
     $("#pWideRow").style.display  = printOpts.fitMode === "wide"  ? "" : "none";
     $("#pScaleRow").style.display = printOpts.fitMode === "scale" ? "" : "none";
@@ -3478,6 +3509,11 @@ function printDialog(){
   $$("#modalMount input, #modalMount select").forEach(el => {
     el.addEventListener("input", read); el.addEventListener("change", read);
   });
+  $$("#modalMount [data-fill]").forEach(b => b.addEventListener("click", () => {
+    const f = $("#" + b.dataset.fill);
+    f.value = b.textContent;
+    read();
+  }));
   $$("#modalMount [data-preset]").forEach(b => b.addEventListener("click", () => {
     Object.assign(printOpts, PRESETS[b.dataset.preset]);
     delete printOpts.label; delete printOpts.hint;
@@ -3493,22 +3529,63 @@ function printDialog(){
   read();
 }
 function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
-function guessTitle(){
+/** The commonest field value among everyone on record. */
+function commonest(pick){
   const counts = {};
-  for(const id in S.people){ const l = (P(id).last||"").trim(); if(l) counts[l] = (counts[l]||0) + 1; }
-  const top = Object.keys(counts).sort((a,b) => counts[b] - counts[a])[0];
-  return top ? "The " + top + " Family" : "Our Family";
+  for(const id in S.people){
+    const v = (pick(P(id)) || "").trim();
+    if(v) counts[v] = (counts[v] || 0) + 1;
+  }
+  return Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0] || "";
 }
-function guessSubtitle(){
+function familyName(){ return commonest(p => p.last); }
+function guessTitle(){
+  const n = familyName();
+  return n ? "The " + n + " Family" : "Our Family";
+}
+function yearSpan(){
   const ys = [];
   for(const id in S.people){
-    const b = parseInt(yearOf(P(id).birth)); if(b) ys.push(b);
-    const d = parseInt(yearOf(P(id).death)); if(d) ys.push(d);
+    const b = parseDate(P(id).birth); if(b) ys.push(b.y);
+    const d = parseDate(P(id).death); if(d) ys.push(d.y);
   }
+  return ys.length ? Math.min.apply(null, ys) + "–" + Math.max.apply(null, ys) : "";
+}
+function guessSubtitle(){
   const gens = LAY ? LAY.rows.length : 0;
-  if(!ys.length) return gens ? gens + " generations" : "";
-  const lo = Math.min(...ys), hi = Math.max(...ys);
-  return (gens ? gens + " generations, " : "") + lo + "–" + hi;
+  const span = yearSpan();
+  if(!span) return gens ? gens + " generations" : "";
+  return (gens ? gens + " generations, " : "") + span;
+}
+/** Headings built from the family's own name, place and founder. */
+function titleIdeas(){
+  const n = familyName(), place = commonest(p => p.place);
+  const root = ui.focus && P(ui.focus) ? P(ui.focus) : null;
+  const out = [];
+  if(n){
+    out.push("The " + n + " Family");
+    if(place) out.push("The " + n + "s of " + place);
+    out.push(n + " Family Tree");
+  }
+  if(root) out.push("Descendants of " + fullName(root));
+  out.push("Our Family");
+  return [...new Set(out)].filter(Boolean).slice(0, 4);
+}
+function subtitleIdeas(){
+  const gens = LAY ? LAY.rows.length : 0;
+  const n = Object.keys(S.people).length;
+  const span = yearSpan(), place = commonest(p => p.place);
+  const out = [];
+  if(gens && span) out.push(gens + " generations, " + span);
+  if(n) out.push(n + " people" + (gens ? " across " + gens + " generations" : ""));
+  if(place && span) out.push("From " + place + ", " + span);
+  out.push("Compiled " + new Date().toLocaleDateString(undefined, {month:"long", year:"numeric"}));
+  return [...new Set(out)].filter(Boolean).slice(0, 3);
+}
+/** Forget a heading the user never chose, so it follows the next family in. */
+function resetHeading(){
+  S.meta.title = ""; S.meta.subtitle = ""; S.meta.note = "";
+  printOpts.title = ""; printOpts.subtitle = ""; printOpts.note = "";
 }
 
 /** Work out the sheet grid for the current options. */
@@ -3938,7 +4015,7 @@ function fileDialog(){
         <button class="btn" data-close>Keep</button>
         <button class="btn danger" id="cOk">Clear</button></div></div>`);
     $("#cOk").addEventListener("click", () => {
-      snapshot(); S = blankDoc(); ORIGIN = null; ui.isSample = false; ui.sel = null; ui.focus = null;
+      snapshot(); S = blankDoc(); ORIGIN = null; ui.isSample = false; resetHeading(); ui.sel = null; ui.focus = null;
       closeModal(); commit("Cleared");
     });
   });
@@ -4764,6 +4841,7 @@ function importDoc(d, mode, fromShare){
     toast(mergeReport(r));
   } else {
     S = normalise(d);
+    if(!d.meta || !d.meta.title) resetHeading();
     ui.isSample = false; ui.sel = null; ui.focus = null;
     /* remember this arrived from someone, so additions can go back to them */
     ORIGIN = fromShare
@@ -4998,6 +5076,7 @@ function toast(msg, warn){
 }
 
 /* ── stage interaction ─────────────────────────────────── */
+let userMoved = false;             // has the reader panned or zoomed yet
 (function stageEvents(){
   const stage = $("#stage"), svg = $("#chart");
   let drag = null;
@@ -5026,12 +5105,12 @@ function toast(msg, warn){
       const px = pinch.cx - r.left, py = pinch.cy - r.top;
       ui.tx = px - (px - pinch.tx) * (k / pinch.z);
       ui.ty = py - (py - pinch.ty) * (k / pinch.z);
-      ui.z = k; applyTransform(); return;
+      ui.z = k; userMoved = true; applyTransform(); return;
     }
     if(!drag) return;
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     if(!drag.moved && Math.hypot(dx, dy) > 4){ drag.moved = true; svg.classList.add("panning"); }
-    if(drag.moved){ ui.tx = drag.tx + dx; ui.ty = drag.ty + dy; applyTransform(); }
+    if(drag.moved){ userMoved = true; ui.tx = drag.tx + dx; ui.ty = drag.ty + dy; applyTransform(); }
   });
   const end = e => {
     pointers.delete(e.pointerId);
@@ -5055,11 +5134,12 @@ function toast(msg, warn){
     const k = clamp(ui.z * Math.pow(0.9987, e.deltaY * (e.ctrlKey ? 3 : 1)), 0.06, 4);
     ui.tx = px - (px - ui.tx) * (k / ui.z);
     ui.ty = py - (py - ui.ty) * (k / ui.z);
-    ui.z = k; applyTransform();
+    ui.z = k; userMoved = true; applyTransform();
   }, {passive:false});
 })();
 
 function zoomBy(f){
+  userMoved = true;
   const r = $("#stage").getBoundingClientRect();
   const px = r.width/2, py = r.height/2;
   const k = clamp(ui.z * f, 0.06, 4);
@@ -5131,7 +5211,7 @@ $("#emptyAdd").addEventListener("click", () => addFlow());
 $("#emptySample").addEventListener("click", () => loadSample());
 $("#flagSend").addEventListener("click", sendBackDialog);
 $("#flagClear").addEventListener("click", () => {
-  snapshot(); S = blankDoc(); ORIGIN = null; ui.isSample = false; ui.sel = null; ui.focus = null;
+  snapshot(); S = blankDoc(); ORIGIN = null; ui.isSample = false; resetHeading(); ui.sel = null; ui.focus = null;
   commit("Cleared — the chart is yours now");
 });
 function addFlow(){
@@ -5159,6 +5239,10 @@ $("#railList").addEventListener("click", e => {
   if(window.matchMedia("(max-width:1000px)").matches) $("#app").classList.add("rail-hidden");
 });
 $("#btnRail").addEventListener("click", () => $("#app").classList.toggle("rail-hidden"));
+$("#drawerScrim").addEventListener("click", () => {
+  $("#app").classList.add("rail-hidden");
+  if(ui.sel){ ui.sel = null; renderRail(); renderInspector(); drawChart(); }
+});
 $("#zIn").addEventListener("click", () => zoomBy(1.25));
 $("#zOut").addEventListener("click", () => zoomBy(0.8));
 $("#zFit").addEventListener("click", () => fitView());
@@ -5392,9 +5476,11 @@ function loadSample(){
   $("#tInlaw").setAttribute("aria-pressed", !!ui.softInlaw);
   $("#tDates").setAttribute("aria-pressed", ui.dates === "full");
 
-  /* redraw once the register faces land, so text measurement is right */
+  /* Redraw once the register faces land — text measures wider then, so the
+     first fit was against the fallback metrics. Re-fit unless the reader has
+     already taken hold of the chart. */
   if(document.fonts && document.fonts.ready){
-    document.fonts.ready.then(() => { drawChart(); });
+    document.fonts.ready.then(() => { drawChart(); if(!userMoved) fitView(); });
   }
   /* the claude.ai viewer hands files to the reader through this; a plain
      file:// copy falls back to an ordinary download link */

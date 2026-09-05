@@ -126,6 +126,12 @@ Tiled posters get glue overlap, corner trim marks, row/column labels, and an
 **assembly sheet** printed first showing the numbered grid and the finished
 size ("6 sheets — 3 across × 2 down, 126 × 84 cm").
 
+**Heading** — the title and subtitle are worked out from your own family: the
+commonest surname, the place most of them come from, the person the chart is
+drawn around. One-tap suggestions sit under each field — *The Deshmukh Family*,
+*The Deshmukhs of Nagpur*, *Descendants of Hari Prasad Deshmukh*. Leave one
+untouched and it keeps following the data; type your own and it sticks.
+
 **On the sheet** — optional frame rule, symbol key, date printed, people count,
 and a **QR code linking to the shared tree**, so guests can scan the poster and
 open the family on their phone.
