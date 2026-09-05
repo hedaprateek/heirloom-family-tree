@@ -848,7 +848,7 @@ const FAM = {ui:'"Public Sans",sans-serif', mono:'"IBM Plex Mono",monospace', di
 
 /* ── state ─────────────────────────────────────────────── */
 const KEY = "heirloom.v1";
-const BUILD = "2026-09-05b";   // shown in Help, so a stale cached copy is obvious
+const BUILD = "2026-09-05c";   // shown in Help, so a stale cached copy is obvious
 let S = blankDoc();
 let ui = {
   view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
@@ -5291,9 +5291,19 @@ $("#railList").addEventListener("click", e => {
   if(window.matchMedia("(max-width:1000px)").matches) $("#app").classList.add("rail-hidden");
 });
 $("#btnRail").addEventListener("click", () => $("#app").classList.toggle("rail-hidden"));
+/* Selecting someone on the chart happens on pointerup; the browser then sends
+   a click, by which time the scrim has appeared under the finger. Without this
+   the panel would open and shut in the same tap, so a click only counts as
+   "tapped outside" when the gesture began on the scrim itself. */
+let scrimArmed = false;
+document.addEventListener("pointerdown", e => {
+  scrimArmed = e.target === $("#drawerScrim");
+}, true);
 $("#drawerScrim").addEventListener("click", () => {
+  if(!scrimArmed) return;
+  scrimArmed = false;
   $("#app").classList.add("rail-hidden");
-  if(ui.sel){ ui.sel = null; renderRail(); renderInspector(); drawChart(); }
+  if(ui.sel) closeInspector();
 });
 $("#zIn").addEventListener("click", () => zoomBy(1.25));
 $("#zOut").addEventListener("click", () => zoomBy(0.8));
