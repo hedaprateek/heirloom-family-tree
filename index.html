@@ -4735,10 +4735,12 @@ function shareDialog(){
         <label class="f" style="margin-top:12px"><span>Link</span>
           <input id="shURL" readonly style="font-family:var(--f-mono);font-size:11px"></label>
         <div style="display:flex;gap:7px;margin-top:9px;flex-wrap:wrap;align-items:center">
-          <button class="btn sm primary" id="shCopy">Copy link</button>
+          <button class="btn sm primary" id="shSend" hidden>Send…</button>
+          <button class="btn sm" id="shCopy">Copy link</button>
+          <button class="btn sm" id="shFile">Save as a file</button>
           <button class="btn sm" id="shQR">Save QR image</button>
-          <span class="mono" id="shSize" style="font-size:10.5px;color:var(--ink-3)"></span>
         </div>
+        <div class="mono" id="shSize" style="font-size:10.5px;color:var(--ink-3);margin-top:7px;line-height:1.6"></div>
 
         <div id="shQRBox" style="display:flex;justify-content:center;padding:16px 0 4px"></div>
 
@@ -4759,11 +4761,14 @@ function shareDialog(){
     if(by !== (S.meta.sharedBy || "")){ S.meta.sharedBy = by; save(); }
     url = await shareURL({photos, by, view:$("#shView").value});
     $("#shURL").value = url;
-    const kb = (url.length / 1024).toFixed(1);
-    const long = url.length > 8000;
-    $("#shSize").innerHTML = kb + " kB" + (long
-      ? ` · <span style="color:var(--danger)">very long — some apps will cut it. Send a family file instead.</span>`
-      : "");
+    /* Past roughly 1,500 characters a URL stops behaving like a link in chat
+       apps — some do not make it tappable, some cut it at a line break. */
+    const n = url.length;
+    $("#shSize").innerHTML = n + " characters"
+      + (n > 1500
+        ? ` · <span style="color:var(--danger)">long enough that some chat apps will not make it
+            tappable, or will cut it. Use <b>Send…</b> if you see it, or send the file.</span>`
+        : ` · short enough to paste anywhere`);
     const q = qrShape(url, 3);
     $("#shQRBox").innerHTML = q
       ? `<div style="text-align:center">
@@ -4778,9 +4783,25 @@ function shareDialog(){
   $("#shView").addEventListener("change", build);
   $("#shPhoto").addEventListener("change", build);
   $("#shBy").addEventListener("input", build);
+  /* The phone's own share sheet hands the URL over as a link rather than as
+     typed text, which is the only reliable way to send one this long. */
+  if(navigator.share){
+    const b = $("#shSend");
+    b.hidden = false;
+    b.addEventListener("click", async () => {
+      try {
+        await navigator.share({title:(S.meta.title || guessTitle()), url});
+      } catch(e){ if(e && e.name !== "AbortError") toast("Sharing was not possible here", true); }
+    });
+  }
   $("#shCopy").addEventListener("click", async () => {
     try { await navigator.clipboard.writeText(url); toast("Link copied"); }
     catch(e){ $("#shURL").select(); toast("Press Ctrl+C to copy", true); }
+  });
+  $("#shFile").addEventListener("click", async () => {
+    const doc = JSON.stringify({app:"heirloom", version:1, data:S}, null, 1);
+    if(await offer(slug() + ".json", doc, "application/json"))
+      toast("Saved — send them the file, it has no length limit");
   });
   $("#shQR").addEventListener("click", async () => {
     const q = qrShape(url, 8);
@@ -4915,10 +4936,11 @@ function sendBackDialog(){
         <label class="f" style="margin-top:10px"><span>Link to send back</span>
           <input id="cbURL" readonly style="font-family:var(--f-mono);font-size:11px"></label>
         <div style="display:flex;gap:7px;margin-top:9px;flex-wrap:wrap;align-items:center">
-          <button class="btn sm primary" id="cbCopy">Copy link</button>
+          <button class="btn sm primary" id="cbSend" hidden>Send…</button>
+          <button class="btn sm" id="cbCopy">Copy link</button>
           <button class="btn sm" id="cbFile">Send as a file instead</button>
-          <span class="mono" id="cbSize" style="font-size:10.5px;color:var(--ink-3)"></span>
         </div>
+        <div class="mono" id="cbSize" style="font-size:10.5px;color:var(--ink-3);margin-top:7px;line-height:1.6"></div>
         <div class="notice" style="background:var(--accent-tint);border-color:var(--accent-ring);color:var(--accent-2)">
           It carries your whole copy, not just the new bits — that is fine.
           Merging only adds people and fills in blanks, so nothing at the other end is overwritten.
@@ -4930,9 +4952,19 @@ function sendBackDialog(){
   const build = async () => {
     url = await shareURL({photos:false, contributor:$("#cbWho").value.trim()});
     $("#cbURL").value = url;
-    $("#cbSize").textContent = (url.length / 1024).toFixed(1) + " kB";
+    $("#cbSize").innerHTML = url.length + " characters" + (url.length > 1500
+      ? ` · <span style="color:var(--danger)">some chat apps will not make a link this long
+          tappable — use <b>Send…</b>, or send the file</span>` : "");
   };
   $("#cbWho").addEventListener("input", build);
+  if(navigator.share){
+    const b = $("#cbSend");
+    b.hidden = false;
+    b.addEventListener("click", async () => {
+      try { await navigator.share({title:"My additions", url}); }
+      catch(e){ if(e && e.name !== "AbortError") toast("Sharing was not possible here", true); }
+    });
+  }
   $("#cbCopy").addEventListener("click", async () => {
     try { await navigator.clipboard.writeText(url); toast("Copied — send it back"); }
     catch(e){ $("#cbURL").select(); toast("Press Ctrl+C to copy", true); }
