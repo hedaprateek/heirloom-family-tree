@@ -566,7 +566,22 @@ kbd{
 .sheetprev .title-rule{stroke:var(--brass);stroke-width:1.5}
 
 /* ── responsive ──────────────────────────────────────────── */
+/* Tap anywhere off an open drawer to shut it. This must be declared BEFORE
+   the narrow-screen block, or its display:none outranks the display:block
+   there by source order and the scrim never exists. */
+#drawerScrim{
+  display:none;position:fixed;inset:54px 0 0;z-index:38;
+  background:color-mix(in srgb,var(--paper-2) 58%,transparent);
+  opacity:0;pointer-events:none;transition:opacity .2s;
+}
+/* a way out of the panel that is impossible to miss on a phone */
+.insp-foot{
+  display:none;padding:10px 14px;border-top:1px solid var(--hair);
+  background:var(--panel-2);
+}
+.insp-foot .btn{width:100%;justify-content:center;padding:10px}
 .only-narrow{display:none}
+.only-narrow-block{display:none}
 @media (max-width:1000px){
   #app,#app.insp-open,#app.rail-hidden{grid-template-columns:minmax(0,1fr);grid-template-areas:"bar" "stage"}
   /* A closed drawer must be fully gone: off-screen alone still casts its
@@ -588,14 +603,9 @@ kbd{
   #app:not(.rail-hidden) ~ #drawerScrim,
   #app.insp-open ~ #drawerScrim{opacity:1;pointer-events:auto}
   .only-narrow{display:inline-flex}
+  .only-narrow-block{display:block}
   .hide-narrow{display:none !important}
   .legend,.credit{display:none}
-}
-/* tap anywhere off a drawer to shut it */
-#drawerScrim{
-  display:none;position:fixed;inset:54px 0 0;z-index:38;
-  background:color-mix(in srgb,var(--paper-2) 58%,transparent);
-  opacity:0;pointer-events:none;transition:opacity .2s;
 }
 </style>
 </head>
@@ -760,6 +770,9 @@ kbd{
       </button>
     </div>
     <div class="insp-body" id="inspBody"></div>
+    <div class="insp-foot only-narrow-block">
+      <button class="btn primary" id="ihDone">Done — show the chart</button>
+    </div>
   </aside>
 </div>
 
@@ -835,6 +848,7 @@ const FAM = {ui:'"Public Sans",sans-serif', mono:'"IBM Plex Mono",monospace', di
 
 /* ── state ─────────────────────────────────────────────── */
 const KEY = "heirloom.v1";
+const BUILD = "2026-09-05b";   // shown in Help, so a stale cached copy is obvious
 let S = blankDoc();
 let ui = {
   view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
@@ -3985,8 +3999,8 @@ function fileDialog(){
           </div>
         </fieldset>
         <div class="mono" style="font-size:10px;color:var(--ink-3);margin-top:14px;text-align:center">
-          Heirloom · Stunity tech — by Prateek
-        </div>
+          Heirloom · build ${BUILD} · Stunity tech — by Prateek
+      </div>
       </div>
       <div class="modal-foot"><span class="spring"></span><button class="btn" data-close>Close</button></div>
     </div>`);
@@ -5231,7 +5245,13 @@ function guessSurname(){
 $("#btnShare").addEventListener("click", shareDialog);
 $("#btnFile").addEventListener("click", fileDialog);
 $("#btnPrint").addEventListener("click", printDialog);
-$("#ihClose").addEventListener("click", () => { ui.sel = null; renderRail(); renderInspector(); drawChart(); });
+function closeInspector(){
+  ui.sel = null;
+  clearTimeout(redrawTimer);
+  renderRail(); renderInspector(); drawChart();
+}
+$("#ihClose").addEventListener("click", closeInspector);
+$("#ihDone").addEventListener("click", closeInspector);
 $("#q").addEventListener("input", e => { ui.query = e.target.value; renderRail(); });
 $("#railList").addEventListener("click", e => {
   const b = e.target.closest("[data-id]"); if(!b) return;
@@ -5267,7 +5287,9 @@ $("#tPhoto").addEventListener("click", () => {
   const order = ["compact", "standard", "portrait"];
   ui.style = order[(order.indexOf(ui.style) + 1) % order.length];
   save(); render();
-  toast(ui.style === "portrait" ? "Cards with photos" : ui.style === "compact" ? "Compact cards" : "Standard cards");
+  toast({compact:"Compact — names and dates only",
+         standard:"Standard — with place and occupation",
+         portrait:"Photos, place and occupation"}[ui.style]);
 });
 $("#btnTheme").addEventListener("click", () => {
   const cur = document.documentElement.getAttribute("data-theme");
@@ -5326,7 +5348,11 @@ function helpDialog(){
         </div>
       </fieldset>
       <div class="mono" style="font-size:10px;color:var(--ink-3);margin-top:16px;text-align:center">
-        Heirloom · Stunity tech — by Prateek
+        Heirloom · build ${BUILD} · Stunity tech — by Prateek
+      </div>
+      <div class="mono" style="font-size:10px;color:var(--ink-3);margin-top:5px;text-align:center;line-height:1.6">
+        Seeing something you thought was fixed? A phone can hold on to the old page.<br>
+        Pull down to refresh, or open the link again in a new tab.
       </div>
     </div>
     <div class="modal-foot"><span class="spring"></span><button class="btn primary" data-close>Got it</button></div>
