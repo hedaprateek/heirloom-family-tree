@@ -23,9 +23,9 @@ chart (a faint dashed line runs to them rather than duplicating the card).
 Scope it to the **descendants** of a chosen person, their **ancestors**, or
 **everyone** with unconnected families side by side.
 
-## Five views of the same family
+## Six views of the same family
 
-Switch with the buttons in the top bar or the <kbd>1</kbd>–<kbd>5</kbd> keys.
+Switch with the buttons in the top bar or the <kbd>1</kbd>–<kbd>6</kbd> keys.
 All five print and export identically, so pick the picture you want and hit
 Print. A link can also open straight into one: `?view=tree`.
 
@@ -36,6 +36,7 @@ Print. A link can also open straight into one: `?view=tree`.
 | **Fan** | Generations as concentric rings, each slice sized by how much of the family sits behind that person. The best poster for a deep family. |
 | **Timeline** | One bar per life across the years, grouped by generation, with brass ties marking the year two people married. Shows at a glance who overlapped whom. |
 | **Register** | A numbered list to hand round the table, using d'Aboville numbering — `1.2.1` places anyone exactly without needing the chart. |
+| **In-laws** | The families married into: each married-in person with their own parents and their brothers and sisters, and a line saying who they married. Kept off the main chart, which is why it exists. |
 
 ## Reading the chart
 
@@ -67,6 +68,31 @@ for those who have died, marked *about* when only a year is known.
 The calendar button beside the zoom controls switches the chart between years
 only and full dates. Full dates are also what siblings are sorted by, so two
 children born in the same year fall in the right order.
+
+## The families you married into
+
+A spouse's own parents and siblings would swamp a descent chart, so they are
+kept off it. Record them anyway — open anyone who married in and add their
+parents or their brothers and sisters — and they gather in the **In-laws**
+view, one panel per family:
+
+```
+THE JOSHI FAMILY
+  [Govind Joshi] ⚭ [Sarala Joshi]
+              │
+  [Kamala Joshi]  [Madhav Joshi]
+  Kamala ⚭ 1941 Hari Prasad Deshmukh
+```
+
+The person who married in is highlighted and carries a ⚭ badge; the last line
+says who in your family they married. Inside their own family everyone goes by
+the name they were born with, so Kamala reads *Kamala Joshi*, not *Kamala
+Deshmukh*. Families where only the spouse is known so far still get a panel —
+which makes the view a useful list of what is still missing.
+
+Panels are grouped by birth family, so two sisters who married two brothers
+share one. If an in-law's parents *are* already on the main chart, no panel is
+made — the tie is drawn there instead.
 
 **People who married in** are drawn a step back — smaller, lighter type, no
 generation stripe — so the line of descent reads first and the in-laws stay

@@ -312,6 +312,13 @@ label.f .hint{font-size:10.5px;color:var(--ink-3);margin-top:3px;font-family:var
 .rel-item .go{color:var(--ink-3);padding:4px;border-radius:5px}
 .rel-item .go:hover{background:var(--panel-2);color:var(--accent-2)}
 .rel-none{font-size:12px;color:var(--ink-3);padding:3px 2px 5px;font-style:italic}
+.side-note{
+  margin-top:9px;padding:8px 10px;border-radius:8px;
+  background:var(--panel-2);border:1px solid var(--hair);
+  font-size:11.5px;line-height:1.55;color:var(--ink-2);
+}
+.linky{color:var(--accent-2);font-weight:600;font-size:11.5px;text-decoration:underline;padding:0}
+.linky:hover{color:var(--accent)}
 .rel-add{
   display:flex;align-items:center;justify-content:center;gap:6px;
   padding:7px;border:1px dashed var(--line-2);border-radius:8px;
@@ -598,6 +605,9 @@ kbd{
       <button id="vList" aria-pressed="false" title="Register — a numbered list to hand round">
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M6 3.6h8M6 8h8M6 12.4h8M2.3 3.6h.9M2.3 8h.9M2.3 12.4h.9"/></svg>
         <span class="lab">Register</span></button>
+      <button id="vInlaw" aria-pressed="false" title="In-law families — who we married into">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="4.4" cy="3.6" r="1.9"/><circle cx="11.6" cy="3.6" r="1.9" stroke-dasharray="1.7 1.7"/><path d="M6.3 3.6h3.4" stroke-linecap="round"/><path d="M11.6 5.5v2.2M8.4 10.4h6.4M8.4 10.4v3.2M14.8 10.4v3.2" stroke-linecap="round" stroke-dasharray="1.7 1.7"/><path d="M4.4 5.5v8.1" stroke-linecap="round"/></svg>
+        <span class="lab">In-laws</span></button>
     </div>
 
     <div class="bar-sep hide-narrow"></div>
@@ -777,6 +787,7 @@ let ui = {
 };
 let LAY = null;                 // last computed layout
 let INLAW = {};                 // pid -> true for people who married in
+let ONCHART = {};               // pid -> true for anyone the main chart draws
 let DL  = null;                 // downloads capability, if the host grants one
 const softly = pid => ui.softInlaw && !!INLAW[pid];
 const undoStack = [], redoStack = [];
@@ -1009,7 +1020,8 @@ function layout(o){
   }
 
   let roots;
-  if(ui.mode === "desc" && ui.focus && P(ui.focus)){
+  const focused = ui.mode === "desc" && ui.focus && P(ui.focus);
+  if(focused){
     roots = [ui.focus];
   } else {
     roots = ids.filter(id => !idx[id].childOf);
@@ -1025,13 +1037,17 @@ function layout(o){
     ox += blk.width + GAP_TREE;
     any = true;
   }
-  // anything left over (data with a cycle, or an orphan spouse) still gets drawn
-  for(const id of ids){
-    if(ctx.placed.has(id)) continue;
-    const blk = build(id, 0, ctx);
-    apply(blk, ox, ctx);
-    ox += blk.width + GAP_TREE;
-    any = true;
+  /* "Descendants of X" means only those — an in-law's own family, and anyone
+     else unconnected, belongs elsewhere. Everywhere else, sweep up whatever
+     the roots missed (a data cycle, an orphan) so nobody vanishes. */
+  if(!focused){
+    for(const id of ids){
+      if(ctx.placed.has(id)) continue;
+      const blk = build(id, 0, ctx);
+      apply(blk, ox, ctx);
+      ox += blk.width + GAP_TREE;
+      any = true;
+    }
   }
   if(!any) return null;
   return finish(null, ctx, false);
@@ -2240,6 +2256,167 @@ function registerView(pal){
           box:{x:-PAD, y:-PAD - 6, w:W + PAD * 2, h:maxH + PAD * 2 + 6}};
 }
 
+/* ── IN-LAW FAMILIES ───────────────────────────────────────
+   The families married into, kept off the main descent where
+   they would swamp it: each married-in person shown with their
+   own parents and their brothers and sisters, and a line
+   saying who in the family they married.
+   ──────────────────────────────────────────────────────── */
+const IL_CW = 158, IL_CH = 42, IL_PAD = 16, IL_SIB = 12, IL_SP = 26, IL_BGAP = 22;
+
+function inlawView(pal){
+  const idx = buildIndex();
+  const married = Object.keys(INLAW).filter(id => S.people[id]);
+  const dl = [], hits = [];
+
+  /* one block per birth family; two siblings who both married in share one */
+  const groups = new Map();
+  for(const id of married){
+    const pu = idx[id].childOf;
+    /* if their parents are already on the main chart the tie is drawn there */
+    if(pu && (U(pu).children || []).length && [U(pu).a, U(pu).b].some(q => q && ONCHART[q])) continue;
+    const key = pu || ("solo:" + id);
+    if(!groups.has(key)) groups.set(key, {pu, stars:[], sibs:[], parents:[]});
+    groups.get(key).stars.push(id);
+  }
+  for(const g of groups.values()){
+    if(g.pu){
+      const u = U(g.pu);
+      g.parents = [u.a, u.b].filter(q => q && S.people[q]);
+      g.sibs = (u.children || []).filter(k => S.people[k]).slice().sort(byBirth);
+      g.union = u;
+    }
+    if(!g.sibs.length) g.sibs = g.stars.slice();
+    for(const s of g.stars) if(!g.sibs.includes(s)) g.sibs.push(s);
+  }
+
+  const blocks = [...groups.values()];
+  if(!blocks.length){
+    const msg = married.length
+      ? "Nobody who married in has their own family recorded yet."
+      : "No one has married into this family yet.";
+    dl.push({t:"text", x:0, y:0, s:msg, size:17, fam:"disp", weight:600, fill:pal.ink});
+    dl.push({t:"text", x:0, y:26, s:"Open someone who married in, then add their parents or their",
+             size:12.5, fill:pal.ink2});
+    dl.push({t:"text", x:0, y:44, s:"brothers and sisters. They stay off the main chart and gather here.",
+             size:12.5, fill:pal.ink2});
+    return {kind:"inlaws", dl, hits:[], nodes:[], rows:[],
+            box:{x:-PAD, y:-PAD - 20, w:520 + PAD * 2, h:64 + PAD * 2}};
+  }
+
+  /* name the family after the maiden name where there is one */
+  const famName = g => {
+    if(g.parents.length && P(g.parents[0]).last) return P(g.parents[0]).last;
+    for(const s of g.stars) if(P(s).maiden) return P(s).maiden;
+    for(const s of g.stars) if(P(s).last) return P(s).last;
+    return "Family";
+  };
+  for(const g of blocks){
+    g.name = "THE " + famName(g).toUpperCase() + " FAMILY";
+    g.links = [];
+    for(const s of g.stars){
+      for(const uid of idx[s].unions){
+        const u = U(uid), sp = partnerOf(u, s);
+        if(!sp || !P(sp) || INLAW[sp]) continue;
+        g.links.push((g.stars.length > 1 || g.sibs.length > 1 ? (P(s).first || fullName(P(s))) + "  " : "")
+          + (u.divorced ? "⚮" : u.status === "partners" ? "◇" : "⚭")
+          + (yearOf(u.date) ? " " + yearOf(u.date) : "") + "  " + fullName(P(sp)));
+      }
+    }
+    const pw = g.parents.length ? g.parents.length * IL_CW + (g.parents.length - 1) * IL_SP : 0;
+    const sw = g.sibs.length * IL_CW + (g.sibs.length - 1) * IL_SIB;
+    g.inner = Math.max(pw, sw, 210);
+    g.w = g.inner + IL_PAD * 2;
+    g.h = IL_PAD + 26 + (g.parents.length ? IL_CH + 24 : 0) + IL_CH
+        + (g.links.length ? 10 + g.links.length * 15 : 0) + IL_PAD;
+  }
+
+  const colW = Math.max.apply(null, blocks.map(b => b.w));
+  const totalH = blocks.reduce((t, b) => t + b.h + IL_BGAP, 0);
+  const N = clamp(Math.round(Math.sqrt(totalH / (colW * 1.15))), 1, 4);
+  const perCol = totalH / N;
+
+  /* inside their own family they go by the name they were born with */
+  const birthName = p => [p.first, p.maiden || p.last].filter(Boolean).join(" ").trim() || "Unnamed";
+  function card(pid, x, y, star){
+    const p = P(pid);
+    dl.push({t:"rect", x, y, w:IL_CW, h:IL_CH, r:6,
+             fill: star ? mix(pal.card, pal.accent, .12) : (isDead(p) ? pal.card2 : pal.card),
+             stroke: star ? pal.accent : pal.line2, sw: star ? 1.4 : 1});
+    dl.push({t:"text", x:x + 10, y:y + 18, s:fitTo(birthName(p), IL_CW - (star ? 32 : 20), 12, "ui", 600),
+             size:12, weight:600, fill:pal.ink});
+    const life = lifeLine(p);
+    if(life) dl.push({t:"text", x:x + 10, y:y + 32, s:fitTo(life, IL_CW - 20, 9.5, "mono"),
+                      size:9.5, fam:"mono", fill:pal.ink2});
+    if(star) dl.push({t:"text", x:x + IL_CW - 11, y:y + 18, s:"⚭", size:11,
+                      fill:pal.brass, anchor:"end"});
+    hits.push({pid, x, y, w:IL_CW, h:IL_CH, depth:0});
+  }
+
+  let col = 0, cy = 0, maxH = 0;
+  for(const g of blocks){
+    if(cy > perCol && col < N - 1){ col++; cy = 0; }
+    const bx = col * (colW + 34), by = cy;
+    dl.push({t:"rect", x:bx, y:by, w:colW, h:g.h, r:10,
+             fill:mix(pal.card, pal.paper, .55), stroke:pal.line, sw:1});
+    dl.push({t:"text", x:bx + IL_PAD, y:by + IL_PAD + 10, s:g.name, size:9.5, fam:"mono",
+             fill:pal.ink3, ls:"1.6px"});
+    dl.push({t:"path", d:`M${r1(bx + IL_PAD)} ${r1(by + IL_PAD + 18)} H${r1(bx + colW - IL_PAD)}`,
+             stroke:pal.line, sw:1});
+
+    const inner = colW - IL_PAD * 2;
+    let y = by + IL_PAD + 26;
+    let parentMid = null;
+    if(g.parents.length){
+      const pw = g.parents.length * IL_CW + (g.parents.length - 1) * IL_SP;
+      let px = bx + IL_PAD + (inner - pw) / 2;
+      g.parents.forEach((q, i) => {
+        if(i){
+          const gx = px - IL_SP / 2;
+          dl.push({t:"path", d:`M${r1(px - IL_SP)} ${r1(y + IL_CH/2)} H${r1(px)}`,
+                   stroke:pal.brass, sw:1.4});
+          dl.push({t:"text", x:gx, y:y + IL_CH/2 + 4, s:g.union && g.union.divorced ? "⚮" : "⚭",
+                   size:11, fill:pal.brass, anchor:"middle"});
+        }
+        card(q, px, y, false);
+        px += IL_CW + IL_SP;
+      });
+      parentMid = bx + IL_PAD + inner / 2;
+      y += IL_CH;
+      dl.push({t:"path", d:`M${r1(parentMid)} ${r1(y)} V${r1(y + 14)}`, stroke:pal.line2, sw:1.4, cap:"round"});
+      y += 24;
+    }
+
+    const sw2 = g.sibs.length * IL_CW + (g.sibs.length - 1) * IL_SIB;
+    /* centred under the parents; ranged left when there are none to sit under */
+    let sx = bx + IL_PAD + (g.parents.length ? (inner - sw2) / 2 : 0);
+    const anchors = [];
+    g.sibs.forEach(s => { anchors.push(sx + IL_CW / 2); card(s, sx, y, g.stars.includes(s)); sx += IL_CW + IL_SIB; });
+    if(parentMid != null){
+      const lo = Math.min(parentMid, anchors[0]), hi = Math.max(parentMid, anchors[anchors.length - 1]);
+      dl.push({t:"path", d:`M${r1(lo)} ${r1(y - 10)} H${r1(hi)}`, stroke:pal.line2, sw:1.4, cap:"round"});
+      anchors.forEach(ax => dl.push({t:"path", d:`M${r1(ax)} ${r1(y - 10)} V${r1(y)}`,
+                                     stroke:pal.line2, sw:1.4, cap:"round"}));
+    }
+    y += IL_CH;
+
+    if(g.links.length){
+      y += 10;
+      g.links.forEach(t => {
+        dl.push({t:"text", x:bx + IL_PAD, y:y + 4, s:fitTo(t, inner, 10.5, "ui"),
+                 size:10.5, fill:pal.ink2});
+        y += 15;
+      });
+    }
+    cy += g.h + IL_BGAP;
+    maxH = Math.max(maxH, cy - IL_BGAP);
+  }
+
+  const W = N * colW + (N - 1) * 34;
+  return {kind:"inlaws", dl, hits, nodes:hits, rows:[],
+          box:{x:-PAD, y:-PAD, w:W + PAD * 2, h:maxH + PAD * 2}};
+}
+
 /* ── view dispatch ─────────────────────────────────────── */
 /**
  * Who married in, agreed once per render so the chart, the other views,
@@ -2247,8 +2424,8 @@ function registerView(pal){
  * follows traversal order, which does not depend on node widths.
  */
 function readInlaw(model){
-  INLAW = {};
-  if(model) model.nodes.forEach(n => { if(n.inlaw) INLAW[n.pid] = true; });
+  INLAW = {}; ONCHART = {};
+  if(model) model.nodes.forEach(n => { ONCHART[n.pid] = true; if(n.inlaw) INLAW[n.pid] = true; });
   return INLAW;
 }
 function makeModel(pal){
@@ -2260,6 +2437,7 @@ function makeModel(pal){
     if(ui.view === "fan")      return fanView(pal);
     if(ui.view === "time")     return timeView(pal);
     if(ui.view === "register") return registerView(pal);
+    if(ui.view === "inlaws")   return inlawView(pal);
     return layout();
   } catch(err){
     console.error("view failed", err);
@@ -2428,7 +2606,12 @@ function renderInspector(){
   }
   if(parents.length < 2)
     html += `<button class="rel-add" data-act="add-parent">＋ Add a parent</button>`;
-  html += `</div></fieldset>`;
+  html += `</div>`;
+  if(INLAW[p.id])
+    html += `<div class="side-note">${esc(p.first || "They")} married into the family, so their own
+      parents and their brothers and sisters stay off the main chart. Add them here and they gather
+      in the <button class="linky" data-act="go-inlaws">In-law families</button> view.</div>`;
+  html += `</fieldset>`;
 
   html += `<fieldset><legend>Partners</legend><div class="rel">`;
   if(info.unions.length){
@@ -2528,6 +2711,7 @@ $("#inspBody").addEventListener("click", e => {
   const p = ui.sel ? P(ui.sel) : null; if(!p) return;
 
   if(act === "goto"){ select(btn.dataset.id); centerOn(btn.dataset.id); return; }
+  if(act === "go-inlaws"){ setView("inlaws"); render(); fitView(); return; }
   if(act === "focus"){ ui.focus = p.id; ui.mode = ui.mode === "all" ? "desc" : ui.mode; setMode(ui.mode); render(); fitView(); return; }
   if(act === "center"){ centerOn(p.id); return; }
   if(act === "photo"){ pickPhoto(p.id); return; }
@@ -4379,9 +4563,10 @@ function zoomBy(f){
 }
 
 /* ── chrome events ─────────────────────────────────────── */
-const VIEWS = {chart:"vChart", tree:"vTree", fan:"vFan", time:"vTime", register:"vList"};
+const VIEWS = {chart:"vChart", tree:"vTree", fan:"vFan", time:"vTime",
+               register:"vList", inlaws:"vInlaw"};
 const VIEW_NAME = {chart:"Register chart", tree:"Tree", fan:"Fan chart",
-                   time:"Timeline", register:"Register list"};
+                   time:"Timeline", register:"Register list", inlaws:"In-law families"};
 function setView(v){
   if(!VIEWS[v]) v = "chart";
   ui.view = v;
@@ -4505,13 +4690,14 @@ function helpDialog(){
         <span class="k">drag</span><span>Pan the chart · scroll or pinch to zoom</span>
         <span class="k">double-click</span><span>Redraw the chart around that person</span>
       </div>
-      <fieldset><legend>The five views</legend>
+      <fieldset><legend>The six views</legend>
         <div class="keys" style="line-height:1.5">
           <span class="k"><b>Chart</b></span><span>The full record — photos, dates, places, every link.</span>
           <span class="k"><b>Tree</b></span><span>Names on branches that thicken with the size of each line of descent.</span>
           <span class="k"><b>Fan</b></span><span>Generations as rings. Best poster for a deep family.</span>
           <span class="k"><b>Timeline</b></span><span>One bar per life, so you can see who overlapped whom.</span>
           <span class="k"><b>Register</b></span><span>A numbered list to hand round — 1.2.1 places anyone without a chart.</span>
+          <span class="k"><b>In-laws</b></span><span>The families married into, with their own parents and siblings — kept off the main chart.</span>
         </div>
         <div style="font-size:12px;color:var(--ink-3);margin-top:9px;line-height:1.6">
           Every view prints and exports the same way, so pick one and hit Print.
@@ -4552,7 +4738,7 @@ document.addEventListener("keydown", e => {
   }
   if(typing || !$("#scrim").hidden) return;
   const k = e.key.toLowerCase();
-  if(/^[1-5]$/.test(k)){
+  if(/^[1-6]$/.test(k)){
     e.preventDefault();
     const v = Object.keys(VIEWS)[+k - 1];
     setView(v); render(); fitView(); toast(VIEW_NAME[v]);
@@ -4622,6 +4808,24 @@ function loadSample(){
   U(u7).children.push(mk("Vivaan","Iyer",{birth:"2003",sex:"M",place:"Chennai"}),
                       mk("Anya","Iyer",{birth:"2007",sex:"F",place:"Chennai"}));
   U(u8).children.push(mk("Kiaan","Deshmukh",{birth:"29 Oct 2014",sex:"M",place:"Delhi"}));
+
+  /* the families married into — off the main descent, gathered in the In-laws view */
+  const gJoshi = mk("Govind","Joshi",{birth:"1894",death:"1968",sex:"M",place:"Nagpur",occupation:"Postmaster"});
+  const sJoshi = mk("Sarala","Joshi",{birth:"1899",death:"1977",sex:"F",place:"Nagpur"});
+  U(addUnion(gJoshi, sJoshi, {date:"1919", place:"Nagpur"})).children.push(
+    kamala, mk("Madhav","Joshi",{birth:"1926",death:"2001",sex:"M",place:"Nagpur",occupation:"Pharmacist"}));
+
+  const dKale = mk("Dattatray","Kale",{birth:"1919",death:"1988",sex:"M",place:"Nashik",occupation:"Farmer"});
+  const iKale = mk("Indira","Kale",{birth:"c. 1924",death:"1996",sex:"F",place:"Nashik"});
+  U(addUnion(dKale, iKale, {date:"1944", place:"Nashik"})).children.push(
+    mk("Asha","Kale",{birth:"1945",sex:"F",place:"Nashik",occupation:"Nurse"}),
+    sulo,
+    mk("Vijay","Kale",{birth:"1950",sex:"M",place:"Nashik",occupation:"Mechanic"}));
+
+  const iSheikh = mk("Iqbal","Sheikh",{birth:"1940",death:"2012",sex:"M",place:"Hyderabad",occupation:"Tailor"});
+  const fSheikh = mk("Farida","Sheikh",{birth:"1946",sex:"F",place:"Hyderabad"});
+  U(addUnion(iSheikh, fSheikh, {date:"1967", place:"Hyderabad"})).children.push(
+    kabir, mk("Nadia","Sheikh",{birth:"1974",sex:"F",place:"Hyderabad",occupation:"Architect"}));
 
   S.meta = {title:"The Deshmukh Family", subtitle:"Four generations, 1918–2024",
             note:"Compiled for the Diwali gathering"};
