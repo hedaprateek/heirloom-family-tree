@@ -24,6 +24,7 @@
   --shade:rgba(22,30,36,.09);
   --lift:0 1px 1px rgba(22,30,36,.05), 0 10px 26px -16px rgba(22,30,36,.4);
   --r:7px;
+  --bar-h:54px;      /* kept in step with the real bar, which wraps when narrow */
   --f-disp:"Fraunces","Noto Serif Devanagari",Georgia,"Times New Roman",serif;
   --f-ui:"Public Sans","Noto Sans Devanagari",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   --f-mono:"IBM Plex Mono","Noto Sans Devanagari",ui-monospace,"SFMono-Regular",Consolas,monospace;
@@ -93,8 +94,19 @@ button{cursor:pointer;background:none;border:0;padding:0}
 /* ── top bar ─────────────────────────────────────────────── */
 .bar{
   grid-area:bar; display:flex; align-items:center; gap:14px;
-  padding:0 12px 0 14px; height:54px;
+  padding:0 12px 0 14px; height:var(--bar-h);
   background:var(--panel); border-bottom:1px solid var(--line);
+}
+/* Below this the controls need more width than the screen has, so the view
+   switcher drops to its own full-width row rather than being clipped away. */
+@media (max-width:660px){
+  .bar{
+    height:auto; flex-wrap:wrap; align-content:center;
+    padding:9px 10px; gap:10px; row-gap:9px;
+  }
+  .bar .seg{order:10; width:100%; padding:3px}
+  .bar .seg button{flex:1; justify-content:center; padding:6px 4px}
+  .bar .bar-sep{display:none}
 }
 .brand{display:flex;align-items:baseline;gap:9px;flex:0 0 auto;padding-right:4px}
 .brand svg{flex:0 0 auto;align-self:center}
@@ -582,7 +594,7 @@ kbd{
    the narrow-screen block, or its display:none outranks the display:block
    there by source order and the scrim never exists. */
 #drawerScrim{
-  display:none;position:fixed;inset:54px 0 0;z-index:38;
+  display:none;position:fixed;inset:var(--bar-h) 0 0;z-index:38;
   background:color-mix(in srgb,var(--paper-2) 58%,transparent);
 }
 @keyframes drawerL{from{transform:translateX(-101%)}to{transform:none}}
@@ -597,13 +609,20 @@ kbd{
 .only-narrow{display:none}
 .only-narrow-block{display:none}
 @media (max-width:1000px){
-  #app,#app.insp-open,#app.rail-hidden{grid-template-columns:minmax(0,1fr);grid-template-areas:"bar" "stage"}
+  /* #app.rail-hidden.insp-open — both classes at once, which is the normal
+     state on a phone once someone is selected — outranks a single-class
+     selector. Without it listed here the desktop three-column grid won on
+     specificity, squeezing the bar into a zero-width column. */
+  #app,
+  #app.insp-open,
+  #app.rail-hidden,
+  #app.rail-hidden.insp-open{grid-template-columns:minmax(0,1fr);grid-template-areas:"bar" "stage"}
   /* A closed drawer is display:none — absolute, and not waiting on a
      transition to finish. Sliding it out with transform meant that if the
      transition did not run, the panel simply stayed on screen. The slide is
      now an entry animation instead, which cannot affect the shut state. */
   .rail,.insp{
-    position:fixed;top:54px;bottom:0;width:min(88vw,320px);z-index:40;
+    position:fixed;top:var(--bar-h);bottom:0;width:min(88vw,320px);z-index:40;
     display:none;box-shadow:0 0 40px -8px var(--shade);
   }
   .rail{left:0}
@@ -860,7 +879,7 @@ const FAM = {ui:'"Public Sans","Noto Sans Devanagari",sans-serif',
 
 /* ── state ─────────────────────────────────────────────── */
 const KEY = "heirloom.v1";
-const BUILD = "2026-09-06c";   // shown in Help, so a stale cached copy is obvious
+const BUILD = "2026-09-06d";   // shown in Help, so a stale cached copy is obvious
 let S = blankDoc();
 let ui = {
   view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
@@ -5460,8 +5479,16 @@ document.addEventListener("keydown", e => {
 window.addEventListener("beforeunload", e => {
   if(ui.dirty && Object.keys(S.people).length > 2){ e.preventDefault(); e.returnValue = ""; }
 });
+/** The bar grows a second row on a narrow screen; the drawers hang off it. */
+function syncBarHeight(){
+  const h = Math.round($(".bar").getBoundingClientRect().height);
+  if(h) document.documentElement.style.setProperty("--bar-h", h + "px");
+}
 let rt = null;
-window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(applyTransform, 120); });
+window.addEventListener("resize", () => {
+  syncBarHeight();
+  clearTimeout(rt); rt = setTimeout(applyTransform, 120);
+});
 
 /* ═══════════════════════════════════════════════════════════
    SAMPLE FAMILY — four generations, so the app opens working.
@@ -5579,8 +5606,9 @@ function loadSample(){
   /* Redraw once the register faces land — text measures wider then, so the
      first fit was against the fallback metrics. Re-fit unless the reader has
      already taken hold of the chart. */
+  syncBarHeight();
   if(document.fonts && document.fonts.ready){
-    document.fonts.ready.then(() => { drawChart(); if(!userMoved) fitView(); });
+    document.fonts.ready.then(() => { syncBarHeight(); drawChart(); if(!userMoved) fitView(); });
   }
   /* the claude.ai viewer hands files to the reader through this; a plain
      file:// copy falls back to an ordinary download link */
