@@ -267,6 +267,10 @@ button{cursor:pointer;background:none;border:0;padding:0}
   grid-area:insp;overflow:hidden;background:var(--panel);
   border-left:1px solid var(--line);display:flex;flex-direction:column;min-width:0;
 }
+/* A collapsed column is 0 wide, but its border still paints a sliver at the
+   screen edge. Drop the borders while the panels are shut. */
+#app.rail-hidden .rail{border-right:0}
+#app:not(.insp-open) .insp{border-left:0}
 .insp-head{
   padding:12px 10px 12px 14px;border-bottom:1px solid var(--hair);
   display:flex;align-items:flex-start;gap:10px;
@@ -850,7 +854,7 @@ const FAM = {ui:'"Public Sans","Noto Sans Devanagari",sans-serif',
 
 /* ── state ─────────────────────────────────────────────── */
 const KEY = "heirloom.v1";
-const BUILD = "2026-09-05d";   // shown in Help, so a stale cached copy is obvious
+const BUILD = "2026-09-06a";   // shown in Help, so a stale cached copy is obvious
 let S = blankDoc();
 let ui = {
   view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
