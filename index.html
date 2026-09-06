@@ -879,7 +879,7 @@ const FAM = {ui:'"Public Sans","Noto Sans Devanagari",sans-serif',
 
 /* ── state ─────────────────────────────────────────────── */
 const KEY = "heirloom.v1";
-const BUILD = "2026-09-06d";   // shown in Help, so a stale cached copy is obvious
+const BUILD = "2026-09-06e";   // shown in Help, so a stale cached copy is obvious
 let S = blankDoc();
 let ui = {
   view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
@@ -1159,30 +1159,53 @@ function layout(o){
 function build(pid, depth, ctx){
   ctx.placed.add(pid);
   const C = ctx.C, W = ctx.W;
-  const members = [{pid, x:0, depth}];
+  const members = [];
   const umeta   = [];
-  let cursor = W(pid);
 
+  /* resolve who sits with this person before placing anyone */
+  const seats = [];
   if(depth < MAX_DEPTH){
     const unions = ctx.idx[pid].unions.filter(uid => !ctx.usedU.has(uid));
     for(const uid of unions){
       ctx.usedU.add(uid);
-      const u  = U(uid);
-      const sp = partnerOf(u, pid);
+      const sp = partnerOf(U(uid), pid);
       if(sp && S.people[sp] && !ctx.placed.has(sp)){
-        ctx.placed.add(sp);
-        const x = cursor + ctx.gS;
-        /* reached as a partner rather than by descent — they married in */
-        members.push({pid:sp, x, depth, inlaw:true});
-        umeta.push({uid, mid:(cursor + x)/2, left:cursor, right:x});
-        cursor = x + W(sp);
+        ctx.placed.add(sp);                 // reached as a partner: they married in
+        seats.push({uid, sp});
       } else if(sp && S.people[sp]){
-        // already drawn elsewhere on the chart — link across instead of duplicating
-        umeta.push({uid, mid:W(pid)/2, solo:true});
-        ctx.cross.push({kind:"spouse", a:pid, b:sp, uid});
+        seats.push({uid, cross:sp});        // drawn elsewhere; link across instead
       } else {
-        umeta.push({uid, mid:W(pid)/2, solo:true});   // partner unknown
+        seats.push({uid});                  // partner unknown
       }
+    }
+  }
+  /* With more than one partner, the first is seated on the left and the rest
+     on the right — so every union band sits between the two people it joins,
+     rather than falling between two spouses who never married each other. */
+  const onLeft = seats.length > 1 && seats[0].sp ? seats[0] : null;
+  const onRight = onLeft ? seats.slice(1) : seats;
+
+  let cursor = 0;
+  if(onLeft){
+    members.push({pid:onLeft.sp, x:0, depth, inlaw:true});
+    cursor = W(onLeft.sp);
+    const x = cursor + ctx.gS;
+    umeta.push({uid:onLeft.uid, mid:(cursor + x)/2, left:cursor, right:x});
+    cursor = x;
+  }
+  let selfX = cursor;
+  members.push({pid, x:selfX, depth});
+  cursor = selfX + W(pid);
+
+  for(const st of onRight){
+    if(st.sp){
+      const x = cursor + ctx.gS;
+      members.push({pid:st.sp, x, depth, inlaw:true});
+      umeta.push({uid:st.uid, mid:(cursor + x)/2, left:cursor, right:x});
+      cursor = x + W(st.sp);
+    } else {
+      umeta.push({uid:st.uid, mid:selfX + W(pid)/2, solo:true});
+      if(st.cross) ctx.cross.push({kind:"spouse", a:pid, b:st.cross, uid:st.uid});
     }
   }
   const headW = cursor;
@@ -1229,11 +1252,12 @@ function build(pid, depth, ctx){
   members.forEach(m => m.x += shift);
   umeta.forEach(m => { m.mid += shift; if(m.left!=null){ m.left += shift; m.right += shift; } });
   groups.forEach(g => g.left += shift);
+  selfX += shift;
 
   return {
     pid, depth, members, umeta, groups,
     width: maxX - minX,
-    anchor: members[0].x + W(pid) / 2,
+    anchor: selfX + W(pid) / 2,      // the descent line drops onto this person
     offset: 0
   };
 }
