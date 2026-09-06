@@ -62,10 +62,15 @@
 /* author display rules otherwise beat the UA's [hidden] rule */
 [hidden]{display:none !important}
 html,body{height:100%}
+/* Pinned to the layout viewport. Left to scroll, a phone shifts the whole
+   document when the keyboard opens over a field and does not always put it
+   back — which showed up as the app being cut off until a refresh. */
 body{
   margin:0; background:var(--paper); color:var(--ink);
   font:400 14px/1.45 var(--f-ui);
-  -webkit-font-smoothing:antialiased; overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+  position:fixed; inset:0; width:100%; overflow:hidden;
+  overscroll-behavior:none; -webkit-text-size-adjust:100%;
 }
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer;background:none;border:0;padding:0}
@@ -75,7 +80,7 @@ button{cursor:pointer;background:none;border:0;padding:0}
 
 /* ── shell ───────────────────────────────────────────────── */
 #app{
-  display:grid; height:100dvh;
+  display:grid; height:100%;
   grid-template-columns:262px minmax(0,1fr) 0;
   grid-template-rows:auto minmax(0,1fr);
   grid-template-areas:"bar bar bar" "rail stage insp";
@@ -491,7 +496,10 @@ kbd{
 /* ── print ───────────────────────────────────────────────── */
 #printRoot{display:none}
 @media print{
-  html,body{overflow:visible !important;height:auto !important;background:#fff !important}
+  html,body{
+    overflow:visible !important;height:auto !important;background:#fff !important;
+    position:static !important;inset:auto !important;   /* let the sheets flow */
+  }
   body>*:not(#printRoot){display:none !important}
   #printRoot{display:block}
 }
@@ -852,7 +860,7 @@ const FAM = {ui:'"Public Sans","Noto Sans Devanagari",sans-serif',
 
 /* ── state ─────────────────────────────────────────────── */
 const KEY = "heirloom.v1";
-const BUILD = "2026-09-06b";   // shown in Help, so a stale cached copy is obvious
+const BUILD = "2026-09-06c";   // shown in Help, so a stale cached copy is obvious
 let S = blankDoc();
 let ui = {
   view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
