@@ -576,8 +576,10 @@ kbd{
 #drawerScrim{
   display:none;position:fixed;inset:54px 0 0;z-index:38;
   background:color-mix(in srgb,var(--paper-2) 58%,transparent);
-  opacity:0;pointer-events:none;transition:opacity .2s;
 }
+@keyframes drawerL{from{transform:translateX(-101%)}to{transform:none}}
+@keyframes drawerR{from{transform:translateX(101%)}to{transform:none}}
+@keyframes scrimIn{from{opacity:0}to{opacity:1}}
 /* a way out of the panel that is impossible to miss, at every width */
 .insp-foot{
   display:block;padding:10px 14px;border-top:1px solid var(--hair);
@@ -588,24 +590,20 @@ kbd{
 .only-narrow-block{display:none}
 @media (max-width:1000px){
   #app,#app.insp-open,#app.rail-hidden{grid-template-columns:minmax(0,1fr);grid-template-areas:"bar" "stage"}
-  /* A closed drawer must be fully gone: off-screen alone still casts its
-     shadow across the stage and still swallows taps at the edge. */
+  /* A closed drawer is display:none — absolute, and not waiting on a
+     transition to finish. Sliding it out with transform meant that if the
+     transition did not run, the panel simply stayed on screen. The slide is
+     now an entry animation instead, which cannot affect the shut state. */
   .rail,.insp{
     position:fixed;top:54px;bottom:0;width:min(88vw,320px);z-index:40;
-    box-shadow:none;visibility:hidden;pointer-events:none;
-    transition:transform .22s cubic-bezier(.2,.7,.3,1),box-shadow .22s,visibility 0s .22s;
+    display:none;box-shadow:0 0 40px -8px var(--shade);
   }
-  .rail{left:0;transform:translateX(-101%)}
-  .insp{right:0;transform:translateX(101%)}
-  #app:not(.rail-hidden) .rail,
-  #app.insp-open .insp{
-    transform:none;visibility:visible;pointer-events:auto;
-    box-shadow:0 0 40px -8px var(--shade);
-    transition:transform .22s cubic-bezier(.2,.7,.3,1),box-shadow .22s,visibility 0s;
-  }
-  #drawerScrim{display:block}
+  .rail{left:0}
+  .insp{right:0}
+  #app:not(.rail-hidden) .rail{display:flex;animation:drawerL .22s cubic-bezier(.2,.7,.3,1)}
+  #app.insp-open .insp{display:flex;animation:drawerR .22s cubic-bezier(.2,.7,.3,1)}
   #app:not(.rail-hidden) ~ #drawerScrim,
-  #app.insp-open ~ #drawerScrim{opacity:1;pointer-events:auto}
+  #app.insp-open ~ #drawerScrim{display:block;animation:scrimIn .18s}
   .only-narrow{display:inline-flex}
   .only-narrow-block{display:block}
   .hide-narrow{display:none !important}
@@ -854,7 +852,7 @@ const FAM = {ui:'"Public Sans","Noto Sans Devanagari",sans-serif',
 
 /* ── state ─────────────────────────────────────────────── */
 const KEY = "heirloom.v1";
-const BUILD = "2026-09-06a";   // shown in Help, so a stale cached copy is obvious
+const BUILD = "2026-09-06b";   // shown in Help, so a stale cached copy is obvious
 let S = blankDoc();
 let ui = {
   view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
