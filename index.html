@@ -185,6 +185,22 @@ button{cursor:pointer;background:none;border:0;padding:0}
   display:flex;align-items:center;justify-content:space-between;
   font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
 }
+.rail-tabs{display:flex;gap:2px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:2px}
+.rail-tabs button{
+  flex:1;padding:5px 6px;border-radius:6px;font-size:12px;font-weight:500;color:var(--ink-2);
+  display:inline-flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;
+}
+.rail-tabs button[aria-pressed="true"]{background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 1px 2px var(--shade)}
+.gapn{
+  font-family:var(--f-mono);font-size:9.5px;padding:0 5px;border-radius:999px;
+  background:var(--brass-tint);color:var(--brass);
+}
+.gapn:empty{display:none}
+.gap-row{display:flex;align-items:baseline;gap:8px;width:100%;text-align:left;padding:7px;border-radius:7px}
+.gap-row:hover{background:var(--panel-2)}
+.gap-row .nm{font-size:12.5px;font-weight:500;flex:0 0 auto}
+.gap-row .what{font-size:11px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gap-done{padding:26px 16px;text-align:center;color:var(--ink-3);font-size:12.5px;line-height:1.7}
 .rail-list{overflow-y:auto;flex:1;padding:6px 8px 16px}
 .rail-gen{
   font-family:var(--f-mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
@@ -206,6 +222,11 @@ button{cursor:pointer;background:none;border:0;padding:0}
 .prow .dt{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-3);white-space:nowrap}
 .prow.inlaw .nm{font-size:12px;font-weight:400;color:var(--ink-2)}
 .prow.inlaw .av{opacity:.62}
+.tag-rel{
+  display:inline-block;margin-top:4px;padding:1px 8px;border-radius:999px;
+  background:var(--accent-tint);color:var(--accent-2);
+  font-size:10.5px;font-weight:500;
+}
 .tag-inlaw{
   display:inline-block;margin-top:4px;padding:1px 7px;border-radius:999px;
   background:var(--panel-3);color:var(--ink-3);
@@ -360,6 +381,18 @@ label.f .hint{font-size:10.5px;color:var(--ink-3);margin-top:3px;font-family:var
 .rel-item .go{color:var(--ink-3);padding:4px;border-radius:5px}
 .rel-item .go:hover{background:var(--panel-2);color:var(--accent-2)}
 .rel-none{font-size:12px;color:var(--ink-3);padding:3px 2px 5px;font-style:italic}
+details.more{margin-top:16px;border-top:1px solid var(--hair);padding-top:10px}
+details.more>summary{
+  cursor:pointer;list-style:none;display:flex;align-items:baseline;gap:8px;
+  font-family:var(--f-mono);font-size:9.5px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--ink-3);padding:3px 0;
+}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::before{content:"+";font-size:12px;line-height:1;color:var(--accent)}
+details.more[open]>summary::before{content:"–"}
+details.more>summary span{text-transform:none;letter-spacing:0;font-size:10px;opacity:.75}
+details.more>summary:hover{color:var(--ink-2)}
+details.more>*:not(summary){margin-top:10px}
 .side-note{
   margin-top:9px;padding:8px 10px;border-radius:8px;
   background:var(--panel-2);border:1px solid var(--hair);
@@ -752,6 +785,10 @@ kbd{
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="7" cy="7" r="4.3"/><path d="M10.2 10.2 14 14" stroke-linecap="round"/></svg>
         <input id="q" type="search" placeholder="Find a person…" autocomplete="off">
       </div>
+      <div class="rail-tabs" role="group" aria-label="List">
+        <button id="tabPeople" aria-pressed="true">Everyone</button>
+        <button id="tabGaps" aria-pressed="false">Still to fill in <span class="gapn" id="gapCount"></span></button>
+      </div>
       <div class="rail-meta"><span id="railCount">0 people</span><span id="railGens">—</span></div>
     </div>
     <div class="rail-list" id="railList"></div>
@@ -906,11 +943,11 @@ const FAM = {ui:'"Public Sans","Noto Sans Devanagari",sans-serif',
 
 /* ── state ─────────────────────────────────────────────── */
 const KEY = "heirloom.v1";
-const BUILD = "2026-09-06h";   // shown in Help, so a stale cached copy is obvious
+const BUILD = "2026-09-06i";   // shown in Help, so a stale cached copy is obvious
 let S = blankDoc();
 let ui = {
   view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
-  softInlaw:true, dates:"year", treeStyle:"canopy",
+  softInlaw:true, dates:"year", treeStyle:"canopy", railTab:"people", moreOpen:false,
   z:1, tx:0, ty:0, query:"", isSample:false, dirty:false
 };
 let LAY = null;                 // last computed layout
@@ -2999,6 +3036,24 @@ function render(){
   $("#btnFocus").disabled = ui.mode === "all";
 }
 
+/**
+ * What is still worth asking someone about. A blank page is paralysing;
+ * a short list of specific gaps is not.
+ */
+function findGaps(){
+  const idx = buildIndex(), out = [];
+  for(const id in S.people){
+    const p = P(id), i = idx[id], miss = [];
+    if(!parseDate(p.birth) && !parseDate(p.death)) miss.push("no dates");
+    if(!p.place) miss.push("no place");
+    if(!p.occupation) miss.push("no work");
+    /* an in-law's own parents are the thing most often never asked about */
+    if(INLAW[id] && !i.parents.length) miss.push("family not recorded");
+    if(miss.length) out.push({id, miss, n:miss.length});
+  }
+  return out.sort((a, b) => b.n - a.n || fullName(P(a.id)).localeCompare(fullName(P(b.id))));
+}
+
 function renderRail(){
   const list = $("#railList");
   const idx = buildIndex();
@@ -3006,6 +3061,20 @@ function renderRail(){
   $("#railCount").textContent = ids.length + (ids.length === 1 ? " person" : " people");
   const gens = LAY ? LAY.rows.length : 0;
   $("#railGens").textContent = gens ? gens + " generations" : "—";
+
+  const gaps = findGaps();
+  $("#gapCount").textContent = gaps.length || "";
+  $("#tabPeople").setAttribute("aria-pressed", ui.railTab !== "gaps");
+  $("#tabGaps").setAttribute("aria-pressed", ui.railTab === "gaps");
+  if(ui.railTab === "gaps"){
+    list.innerHTML = gaps.length
+      ? `<div class="rail-gen">Anything anyone remembers</div>` + gaps.map(g =>
+          `<button class="gap-row" data-id="${g.id}">
+             <span class="nm">${esc(fullName(P(g.id)))}</span>
+             <span class="what">${esc(g.miss.join(" · "))}</span></button>`).join("")
+      : `<div class="gap-done">Nothing obvious left.<br>Every person has dates, a place and an occupation.</div>`;
+    return;
+  }
 
   const q = ui.query.trim().toLowerCase();
   const match = ids.filter(id => {
@@ -3080,15 +3149,6 @@ function renderInspector(){
       <label class="f"><span>First name</span><input data-fld="first" value="${esc(p.first)}" autocomplete="off"></label>
       <label class="f"><span>Family name</span><input data-fld="last" value="${esc(p.last)}" autocomplete="off"></label>
     </div>
-    <div class="fgrid two" style="margin-top:9px">
-      <label class="f"><span>Née / birth name</span><input data-fld="maiden" value="${esc(p.maiden)}" autocomplete="off"></label>
-      <label class="f"><span>Sex</span><select data-fld="sex">
-        <option value=""${p.sex===""?" selected":""}>—</option>
-        <option value="F"${p.sex==="F"?" selected":""}>Female</option>
-        <option value="M"${p.sex==="M"?" selected":""}>Male</option>
-        <option value="X"${p.sex==="X"?" selected":""}>Other</option>
-      </select></label>
-    </div>
   </fieldset>
 
   <fieldset><legend>Life</legend>
@@ -3103,15 +3163,27 @@ function renderInspector(){
     <div class="fgrid" style="margin-top:9px">
       <label class="f"><span>Place</span><input data-fld="place" value="${esc(p.place)}" placeholder="Nagpur" autocomplete="off"></label>
       <label class="f"><span>Occupation</span><input data-fld="occupation" value="${esc(p.occupation)}" placeholder="Schoolteacher" autocomplete="off"></label>
-      <label class="f"><span>Notes</span><textarea data-fld="notes" placeholder="Stories, anecdotes, anything worth keeping.">${esc(p.notes)}</textarea></label>
     </div>
     <div class="hint mono" style="font-size:10.5px;color:var(--ink-3);margin-top:5px">
       A full date, or as much as anyone remembers — 12 Mar 1948, 12/3/1948
       (day first), Mar 1948, 1948, c. 1910.</div>
   </fieldset>
 
-  <fieldset><legend>Photo</legend>
-    <div class="photo-row">
+  <!-- everything most people never touch, folded away by default -->
+  <details class="more"${ui.moreOpen ? " open" : ""}>
+    <summary>More about them<span>née name, sex, notes, photo</span></summary>
+    <div class="fgrid two">
+      <label class="f"><span>Née / birth name</span><input data-fld="maiden" value="${esc(p.maiden)}" autocomplete="off"></label>
+      <label class="f"><span>Sex</span><select data-fld="sex">
+        <option value=""${p.sex===""?" selected":""}>—</option>
+        <option value="F"${p.sex==="F"?" selected":""}>Female</option>
+        <option value="M"${p.sex==="M"?" selected":""}>Male</option>
+        <option value="X"${p.sex==="X"?" selected":""}>Other</option>
+      </select></label>
+    </div>
+    <label class="f" style="margin-top:9px"><span>Notes</span>
+      <textarea data-fld="notes" placeholder="Stories, anecdotes, anything worth keeping.">${esc(p.notes)}</textarea></label>
+    <div class="photo-row" style="margin-top:11px">
       <div class="photo-prev">${p.photo ? `<img src="${esc(p.photo)}" alt="">` : `<span>no<br>photo</span>`}</div>
       <div style="display:flex;flex-direction:column;gap:6px;flex:1">
         <button class="btn sm" data-act="photo">${p.photo ? "Replace photo" : "Choose photo…"}</button>
@@ -3119,7 +3191,7 @@ function renderInspector(){
         <div class="mono" style="font-size:10px;color:var(--ink-3)">Stored inside your file. Scaled to 260px.</div>
       </div>
     </div>
-  </fieldset>
+  </details>
 
   <fieldset><legend>Parents</legend><div class="rel">`;
 
@@ -3177,13 +3249,89 @@ function renderInspector(){
 
   $("#inspBody").innerHTML = html;
 }
+/* ── how two people are related ────────────────────────── */
+function ancestorDepths(id, idx){
+  const out = {}, q = [[id, 0]];
+  while(q.length){
+    const [x, d] = q.shift();
+    if(out[x] != null && out[x] <= d) continue;
+    out[x] = d;
+    if(d > 12) continue;
+    for(const q2 of (idx[x] ? idx[x].parents : [])) q.push([q2, d + 1]);
+  }
+  return out;
+}
+const ORD = ["", "first", "second", "third", "fourth", "fifth", "sixth", "seventh"];
+function greats(n){                       // 1 parent · 2 grand · 3 great-grand …
+  if(n <= 1) return "";
+  return (n > 2 ? "great-".repeat(Math.min(n - 2, 4)) : "") + "grand";
+}
+function removedly(n){
+  return n === 0 ? "" : n === 1 ? " once removed" : n === 2 ? " twice removed"
+       : " " + (ORD[n] || (n + "th")) + " removed";
+}
+/** Reads as "A is the ___ of B". Empty when there is no traceable tie. */
+function relationship(a, b, idx){
+  if(!a || !b || a === b) return "";
+  const pa = P(a), pb = P(b);
+  if(!pa || !pb) return "";
+  const he = pa.sex === "M", she = pa.sex === "F";
+  const pick = (m, f, n) => he ? m : she ? f : n;
+
+  for(const uid of idx[a].unions){
+    if(partnerOf(U(uid), a) !== b) continue;
+    const u = U(uid);
+    if(u.divorced) return pick("former husband", "former wife", "former partner");
+    return u.status === "partners" ? "partner" : pick("husband", "wife", "spouse");
+  }
+
+  const A = ancestorDepths(a, idx), B = ancestorDepths(b, idx);
+  let da = null, db = null, best = Infinity;
+  for(const anc in A){
+    if(B[anc] == null) continue;
+    const s = A[anc] + B[anc];
+    if(s < best){ best = s; da = A[anc]; db = B[anc]; }
+  }
+  if(da == null) return "";
+
+  if(da === 0) return greats(db) + pick("father", "mother", "parent")
+                    .replace(/^(father|mother|parent)$/, m =>
+                      db <= 1 ? m : (m === "father" ? "father" : m === "mother" ? "mother" : "parent"));
+  if(db === 0){
+    if(da === 1) return pick("son", "daughter", "child");
+    return greats(da) + pick("son", "daughter", "child");
+  }
+  if(da === 1 && db === 1) return pick("brother", "sister", "sibling");
+  if(da === 1) return greats(db - 1) + pick("uncle", "aunt", "uncle or aunt");
+  if(db === 1) return greats(da - 1) + pick("nephew", "niece", "nephew or niece");
+  const degree = Math.min(da, db) - 1;
+  return (ORD[degree] || degree + "th") + " cousin" + removedly(Math.abs(da - db));
+}
+function relationLine(pid){
+  const idx = buildIndex();
+  const say = (r, who) => r.charAt(0).toUpperCase() + r.slice(1) + " of " + fullName(P(who));
+  if(ui.focus && ui.focus !== pid && P(ui.focus)){
+    const r = relationship(pid, ui.focus, idx);
+    if(r) return say(r, ui.focus);
+  }
+  /* no blood tie to whoever the chart is drawn around — say who they married
+     instead, which is how someone who married in is actually placed */
+  for(const uid of idx[pid].unions){
+    const sp = partnerOf(U(uid), pid);
+    if(sp && P(sp)) return say(relationship(pid, sp, idx) || "partner", sp);
+  }
+  return "";
+}
+
 function inspSub(p){
   const a = ageOf(p);
   const age = a ? (a.dead ? "died aged " : "") + (a.exact ? "" : "about ") + a.years
                 + (a.dead ? "" : " years old") : "";
+  const rel = relationLine(p.id);
   $("#ihSub").innerHTML = esc(lifeLine(p, "short") || "dates unknown")
     + (age ? ` &nbsp;·&nbsp; <span style="color:var(--ink-3)">${esc(age)}</span>` : "")
-    + (INLAW[p.id] ? `<br><span class="tag-inlaw">married in</span>` : "");
+    + (rel ? `<br><span class="tag-rel">${esc(rel)}</span>` : "")
+    + (INLAW[p.id] ? `${rel ? " " : "<br>"}<span class="tag-inlaw">married in</span>` : "");
 }
 /** Echo back how a typed date was read, so vague entries are not a mystery. */
 function dateEcho(v){
@@ -3230,6 +3378,9 @@ function scheduleRedraw(){
   redrawTimer = setTimeout(() => { drawChart(); renderRail(); }, 180);
 }
 /* leaving a field, or picking from a dropdown, redraws at once */
+$("#inspBody").addEventListener("toggle", e => {
+  if(e.target.classList && e.target.classList.contains("more")) ui.moreOpen = e.target.open;
+}, true);
 $("#inspBody").addEventListener("change", e => {
   if(!e.target.dataset.fld || !ui.sel) return;
   clearTimeout(redrawTimer);
@@ -5485,7 +5636,13 @@ function closeInspector(){
 }
 $("#ihClose").addEventListener("click", closeInspector);
 $("#ihDone").addEventListener("click", closeInspector);
-$("#q").addEventListener("input", e => { ui.query = e.target.value; renderRail(); });
+$("#q").addEventListener("input", e => {
+  ui.query = e.target.value;
+  if(ui.query) ui.railTab = "people";
+  renderRail();
+});
+$("#tabPeople").addEventListener("click", () => { ui.railTab = "people"; renderRail(); });
+$("#tabGaps").addEventListener("click", () => { ui.railTab = "gaps"; renderRail(); });
 $("#railList").addEventListener("click", e => {
   const b = e.target.closest("[data-id]"); if(!b) return;
   select(b.dataset.id); centerOn(b.dataset.id);

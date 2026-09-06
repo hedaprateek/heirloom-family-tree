@@ -35,6 +35,18 @@ chart (a faint dashed line runs to them rather than duplicating the card).
 Scope it to the **descendants** of a chosen person, their **ancestors**, or
 **everyone** with unconnected families side by side.
 
+**Still to fill in.** The second tab in the people list is a to-do list built
+from the data — *Aisha Deshmukh · family not recorded*, *Anya Iyer · no work* —
+sorted worst first, with a count on the tab. Tap one to go straight there. A
+blank page is paralysing; a short list of specific questions is not.
+
+**How anyone is related.** Open someone and the panel says it plainly —
+*Great-grandson of Hari Prasad Deshmukh*, *First cousin once removed of Aarav*.
+Someone who married in is placed by who they married instead.
+
+**The form stays short.** Name, dates, place and occupation are always shown;
+née name, sex, notes and photo fold away under *More about them*.
+
 ## Six views of the same family
 
 Switch with the buttons in the top bar or the <kbd>1</kbd>–<kbd>6</kbd> keys.
