@@ -879,7 +879,7 @@ const FAM = {ui:'"Public Sans","Noto Sans Devanagari",sans-serif',
 
 /* ── state ─────────────────────────────────────────────── */
 const KEY = "heirloom.v1";
-const BUILD = "2026-09-06e";   // shown in Help, so a stale cached copy is obvious
+const BUILD = "2026-09-06f";   // shown in Help, so a stale cached copy is obvious
 let S = blankDoc();
 let ui = {
   view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
@@ -4526,20 +4526,54 @@ function rowsToDoc(rows){
   Object.keys(people).forEach(index);
 
   let invented = 0;
-  function resolve(ref, role, row){
+  const yearNum = pid => parseInt(yearOf((people[pid] || {}).birth)) || 0;
+  /**
+   * Two relatives often share a name. Rather than drop the link, narrow the
+   * candidates: an explicit "Name (1940)", then — for a parent — who could
+   * actually be one, then the sex the column implies, then nearness in age
+   * for a partner. Only give up if it is still genuinely ambiguous.
+   */
+  function resolve(ref, role, row, forId){
     const t = String(ref || "").trim();
     if(!t) return null;
-    const key = t.toLowerCase();
-    if(byId[key]) return byId[key];
-    const hit = byName[key];
-    if(hit && hit.length === 1) return hit[0];
-    if(hit && hit.length > 1){
-      warn.push(`Row ${row}: “${t}” matches ${hit.length} people, so the ${role} link was left off.`);
+    if(byId[t.toLowerCase()]) return byId[t.toLowerCase()];
+
+    const m = t.match(/^(.*?)\s*[(（]\s*(1\d{3}|20\d{2})\s*[)）]\s*$/);
+    const bare = m ? m[1].trim() : t;
+    const wantYear = m ? m[2] : null;
+    if(byId[bare.toLowerCase()]) return byId[bare.toLowerCase()];
+
+    let hits = (byName[bare.toLowerCase()] || []).slice();
+    if(wantYear) hits = hits.filter(id => yearOf(people[id].birth) === wantYear);
+
+    if(hits.length > 1){
+      const mine = yearNum(forId);
+      if(role === "father" || role === "mother"){
+        if(mine){                                   // a parent precedes the child
+          const older = hits.filter(id => yearNum(id) && yearNum(id) <= mine - 12);
+          if(older.length) hits = older;
+        }
+        const want = role === "father" ? "M" : "F";
+        const bySex = hits.filter(id => people[id].sex === want);
+        if(bySex.length) hits = bySex;
+      } else if(role === "partner" && mine){        // partners are near in age
+        const near = hits.filter(id => yearNum(id) && Math.abs(yearNum(id) - mine) <= 25);
+        if(near.length) hits = near;
+      }
+    }
+    if(hits.length === 1) return hits[0];
+    if(hits.length > 1){
+      warn.push(`Row ${row}: “${bare}” matches ${hits.length} people. `
+        + `Put the year after the name — “${bare} (${yearOf(people[hits[0]].birth) || "1940"})” — to say which one.`);
+      return null;
+    }
+    if(wantYear){                                   // named a year nobody has
+      warn.push(`Row ${row}: nobody called “${bare}” was born in ${wantYear}.`);
       return null;
     }
     /* named as someone's parent or partner but with no row of their own —
        give them a card so the link is not lost */
-    const parts = t.split(/\s+/);
+    const parts = bare.split(/\s+/);
     const last = parts.length > 1 ? parts.pop() : "";
     const id = "s" + (seq++);
     people[id] = {id, first:parts.join(" "), last, maiden:"", sex:"", birth:"", death:"",
@@ -4563,15 +4597,15 @@ function rowsToDoc(rows){
 
   for(const rc of recs)                                  // partners first, so the
     rc.partners.forEach((name, j) => {                   // union carries its year
-      const pid = resolve(name, "partner", rc.row);
+      const pid = resolve(name, "partner", rc.row, rc.id);
       if(!pid || pid === rc.id) return;
       const u = unions[unionOf(rc.id, pid)];
       if(!u.date && rc.married[j]) u.date = dateish(String(rc.married[j]).trim());
       if(TRUEISH.test(String(rc.divorced[j] || "").trim())) u.divorced = true;
     });
   for(const rc of recs){
-    const f = resolve(rc.father, "father", rc.row);
-    const m = resolve(rc.mother, "mother", rc.row);
+    const f = resolve(rc.father, "father", rc.row, rc.id);
+    const m = resolve(rc.mother, "mother", rc.row, rc.id);
     if(!f && !m) continue;
     const u = unions[unionOf(f, m)];
     if(!u.children.includes(rc.id)) u.children.push(rc.id);
@@ -4605,6 +4639,9 @@ function templateSheets(){
     [""],
     ["Father / Mother", "Type the person's full name exactly as it appears in their own row."],
     ["", "If they have no row of their own, that is fine — a card is made for them."],
+    ["", "Two relatives with the same name? Put the year after it, in brackets:"],
+    ["", "Ramesh Deshmukh (1940).  Often it is worked out for you — only one of"],
+    ["", "them can be old enough to be the parent — and you are told when it is not."],
     ["Partner", "Full name. For more than one partner, separate with a semicolon:"],
     ["", "Sulochana Kale; Anita Rao"],
     ["Married", "The year, matched to the partners in the same order: 1968; 1990"],

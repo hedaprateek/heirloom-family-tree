@@ -158,6 +158,11 @@ One row per person. Only a name is required:
 - **Father / Mother / Partner** take a person's full name as it appears in
   their own row. Someone named but with no row of their own still gets a card,
   so no link is lost.
+- **Two relatives with the same name** are fine. Both rows are kept, and the
+  link is worked out where it can be — only one Ramesh Deshmukh is old enough
+  to be the father of someone born in 1968, and a *Father* column prefers a
+  man. Where it genuinely cannot tell, put the year after the name —
+  `Ramesh Deshmukh (1940)` — and it says so rather than guessing.
 - More than one partner: separate with semicolons — `Sulochana Kale; Anita Rao`
   — and line the **Married** and **Divorced** columns up in the same order.
 - **Born / Died** accept anything readable: `1948`, `Mar 1948`, `c. 1910`. If
