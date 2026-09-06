@@ -11,6 +11,18 @@ add people, and print the chart at anything from A4 to a six-sheet A1 poster.
 
 ## Building the tree
 
+**Never used anything like this?** The opening screen offers **Start with
+yourself** — four short questions (your name, your parents, your husband or
+wife, your children) and you have a real tree. Nothing is compulsory. It is
+also under File ▸ *Start again, guided*. Beginning with yourself and working
+outwards is what every genealogy guide recommends, because it is the part you
+already know.
+
+**Adding relatives from the chart.** Tap anyone and four **＋** handles appear
+around their card — a parent above, a partner to the right, a child below, a
+brother or sister to the left. No need to go looking in the side panel.
+
+
 Select anyone on the chart and you get **＋ Partner**, **＋ Child**, **＋ Parent**
 and **＋ Sibling**. Each opens a picker that either links someone already on the
 chart or creates them from the name you type — fast enough to fill in at a table

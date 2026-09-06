@@ -331,6 +331,16 @@ label.f input:focus,label.f select:focus,label.f textarea:focus{
 }
 label.f textarea{resize:vertical;min-height:60px;line-height:1.5}
 label.f .hint{font-size:10.5px;color:var(--ink-3);margin-top:3px;font-family:var(--f-mono)}
+/* guided start: one step at a time, with progress shown */
+.wizbar{display:flex;gap:6px;justify-content:center;margin-top:18px}
+.wizdot{width:26px;height:3px;border-radius:2px;background:var(--line)}
+.wizdot.on{background:var(--accent)}
+/* quiet reassurance that nothing has been lost */
+.saved{
+  font-family:var(--f-mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-3);opacity:0;transition:opacity .35s;white-space:nowrap;pointer-events:none;
+}
+.saved.show{opacity:1}
 /* one-tap headings built from the family's own name */
 .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
 .chip{
@@ -505,6 +515,13 @@ kbd{
 #chart .hit{fill:transparent}
 #chart .hit:hover{fill:var(--accent);fill-opacity:.12}
 #chart .selring{fill:none;stroke:var(--accent);stroke-width:2.5;pointer-events:none}
+/* ＋ handles for adding a relative straight from the chart */
+#chart .handle{cursor:pointer}
+#chart .handle-hit{fill:transparent}
+#chart .handle-dot{fill:var(--accent);stroke:var(--panel);stroke-width:2}
+#chart .handle-plus{stroke:var(--panel);stroke-width:2.2;stroke-linecap:round;pointer-events:none}
+#chart .handle:hover .handle-dot{fill:var(--accent-2)}
+#chart .handle:hover .handle-hit{fill:var(--accent);fill-opacity:.14}
 #chart .title-main{fill:var(--ink);font:600 34px var(--f-disp)}
 #chart .title-sub{fill:var(--ink-2);font:400 14px var(--f-ui)}
 #chart .title-rule{stroke:var(--brass);stroke-width:1.5}
@@ -660,6 +677,7 @@ kbd{
       </svg>
       <h1>Heirloom</h1>
       <span class="tag hide-narrow">Family register</span>
+      <span class="saved" id="savedTag">Saved</span>
     </div>
 
     <div class="bar-sep hide-narrow"></div>
@@ -750,10 +768,15 @@ kbd{
           <circle cx="15.5" cy="4.5" r="2.6" stroke="var(--accent)" stroke-width="1.3"/>
           <path d="M9.1 4.5h3.8M11 4.5v5M3.5 17.5v-3.6a1 1 0 0 1 1-1h13a1 1 0 0 1 1 1v3.6M11 9.5v4.4" stroke="var(--brass)" stroke-width="1.3" stroke-linecap="round"/>
         </svg>
-        <h2>Start with one person</h2>
-        <p>Add someone, then hang their partner, children and parents off them. The chart redraws itself as you go.</p>
-        <button class="btn primary" id="emptyAdd">Add the first person</button>
-        <div style="margin-top:12px"><button class="btn ghost sm" id="emptySample">or load the sample family</button></div>
+        <h2>Start with yourself</h2>
+        <p>Four short questions — your name, your parents, your husband or wife, your
+           children — and you will have a family tree. Nothing is compulsory and
+           everything can be changed afterwards.</p>
+        <button class="btn primary" id="emptyStart">Start with yourself</button>
+        <div style="margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+          <button class="btn ghost sm" id="emptyAdd">Just add one person</button>
+          <button class="btn ghost sm" id="emptySample">See the sample family</button>
+        </div>
       </div>
     </div>
 
@@ -883,7 +906,7 @@ const FAM = {ui:'"Public Sans","Noto Sans Devanagari",sans-serif',
 
 /* ── state ─────────────────────────────────────────────── */
 const KEY = "heirloom.v1";
-const BUILD = "2026-09-06g";   // shown in Help, so a stale cached copy is obvious
+const BUILD = "2026-09-06h";   // shown in Help, so a stale cached copy is obvious
 let S = blankDoc();
 let ui = {
   view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
@@ -1582,7 +1605,7 @@ function drawChart(){
   $("#stageEmpty").hidden = !empty;
   if(empty){ svg.innerHTML = ""; return; }
   svg.innerHTML = `<g id="vp">${viewSVG(LAY, {selectable:true, ns:"s"})}`
-                + `${selRing(LAY)}${hitsSVG(LAY)}</g>`;
+                + `${selRing(LAY)}${hitsSVG(LAY)}${addHandles(LAY)}</g>`;
   applyTransform();
 }
 function applyTransform(){
@@ -2927,6 +2950,35 @@ function selRing(model){
        + ` height="${r1(h.h + 4)}" rx="6"/>`;
 }
 
+/**
+ * ＋ handles on whoever is selected, so a relative can be added straight from
+ * the chart instead of hunting through the side panel — the way FamilySearch
+ * and Family Echo both do it. Above is a parent, beside is a partner, below
+ * is a child, and the small one to the left is a brother or sister.
+ */
+const HANDLES = [
+  {act:"add-parent",  label:"Add a parent",           dx:.5,  dy:0,  ox:0,   oy:-20},
+  {act:"add-partner", label:"Add a partner",          dx:1,   dy:.5, ox:20,  oy:0},
+  {act:"add-child",   label:"Add a child",            dx:.5,  dy:1,  ox:0,   oy:20},
+  {act:"add-sibling", label:"Add a brother or sister", dx:0,  dy:.5, ox:-20, oy:0}
+];
+function addHandles(model){
+  if(!ui.sel) return "";
+  const n = (model.nodes || []).find(n => n.pid === ui.sel);
+  if(!n || !n.w) return "";
+  let s = "";
+  for(const h of HANDLES){
+    const cx = n.x + n.w * h.dx + h.ox, cy = n.y + n.h * h.dy + h.oy;
+    s += `<g class="handle" data-act="${h.act}" role="button" tabindex="0">`
+       + `<title>${esc(h.label)}</title>`
+       + `<circle class="handle-hit" cx="${r1(cx)}" cy="${r1(cy)}" r="15"/>`
+       + `<circle class="handle-dot" cx="${r1(cx)}" cy="${r1(cy)}" r="10"/>`
+       + `<path class="handle-plus" d="M${r1(cx-5)} ${r1(cy)} H${r1(cx+5)} M${r1(cx)} ${r1(cy-5)} V${r1(cy+5)}"/>`
+       + `</g>`;
+  }
+  return s;
+}
+
 /* ═══════════════════════════════════════════════════════════
    UI — rail, inspector, forms
    ═══════════════════════════════════════════════════════════ */
@@ -3197,57 +3249,7 @@ $("#inspBody").addEventListener("click", e => {
   if(act === "delete"){ confirmDelete(p); return; }
   if(act === "edit-union"){ unionDialog(btn.dataset.uid); return; }
 
-  if(act === "add-partner"){
-    choosePerson({title:"Add a partner", subtitle:"Pick someone already on the chart, or create a new person.",
-      exclude:[p.id], seed:p.last}, id => {
-      snapshot();
-      if(!unionBetween(p.id, id, false)) addUnion(p.id, id);
-      commit("Partner added"); select(id);
-    });
-    return;
-  }
-  if(act === "add-child"){
-    const idx = buildIndex();
-    const unions = idx[p.id].unions;
-    const place = (uid) => {
-      choosePerson({title:"Add a child", subtitle:"Pick someone already on the chart, or create a new person.",
-        exclude:[p.id], seed:p.last}, id => {
-        snapshot();
-        const u = U(uid) || U(addUnion(p.id, null));
-        if(!u.children.includes(id)) u.children.push(id);
-        commit("Child added"); select(id);
-      });
-    };
-    if(unions.length <= 1) place(unions[0] || addUnion(p.id, null));
-    else chooseUnion(p, unions, place);
-    return;
-  }
-  if(act === "add-parent"){
-    choosePerson({title:"Add a parent", subtitle:"Pick someone already on the chart, or create a new person.",
-      exclude:[p.id], seed:p.last}, id => {
-      snapshot();
-      const uid = parentUnion(p.id, true);
-      const u = U(uid);
-      if(u.a === id || u.b === id){ /* already there */ }
-      else if(!u.a) u.a = id;
-      else if(!u.b) u.b = id;
-      else { toast("Two parents already recorded", true); return; }
-      if(!u.children.includes(p.id)) u.children.push(p.id);
-      commit("Parent added"); select(id);
-    });
-    return;
-  }
-  if(act === "add-sibling"){
-    const uid = parentUnion(p.id, true);
-    choosePerson({title:"Add a sibling", subtitle:"They will share this person’s parents.",
-      exclude:[p.id], seed:p.last}, id => {
-      snapshot();
-      const u = U(uid);
-      if(!u.children.includes(id)) u.children.push(id);
-      commit("Sibling added"); select(id);
-    });
-    return;
-  }
+  if(RELATE[act]){ RELATE[act](p); return; }
   if(act === "unlink"){
     snapshot();
     const other = btn.dataset.id, kind = btn.dataset.kind;
@@ -3266,6 +3268,55 @@ function select(id){
   ui.sel = id;
   renderRail(); renderInspector(); drawChart();
 }
+
+/* Adding a relative, shared by the side panel and the ＋ on the chart itself. */
+const RELATE = {
+  "add-partner": p => choosePerson(
+    {title:"Add a partner", subtitle:"Pick someone already on the chart, or type a new name.",
+     exclude:[p.id], seed:p.last}, id => {
+      snapshot();
+      if(!unionBetween(p.id, id, false)) addUnion(p.id, id);
+      commit("Partner added"); select(id);
+    }),
+
+  "add-child": p => {
+    const unions = buildIndex()[p.id].unions;
+    const place = uid => choosePerson(
+      {title:"Add a child", subtitle:"Pick someone already on the chart, or type a new name.",
+       exclude:[p.id], seed:p.last}, id => {
+        snapshot();
+        const u = U(uid) || U(addUnion(p.id, null));
+        if(!u.children.includes(id)) u.children.push(id);
+        commit("Child added"); select(id);
+      });
+    if(unions.length <= 1) place(unions[0] || addUnion(p.id, null));
+    else chooseUnion(p, unions, place);
+  },
+
+  "add-parent": p => choosePerson(
+    {title:"Add a parent", subtitle:"Pick someone already on the chart, or type a new name.",
+     exclude:[p.id], seed:p.last}, id => {
+      snapshot();
+      const u = U(parentUnion(p.id, true));
+      if(u.a === id || u.b === id){ /* already there */ }
+      else if(!u.a) u.a = id;
+      else if(!u.b) u.b = id;
+      else { toast("Two parents already recorded", true); return; }
+      if(!u.children.includes(p.id)) u.children.push(p.id);
+      commit("Parent added"); select(id);
+    }),
+
+  "add-sibling": p => {
+    const uid = parentUnion(p.id, true);
+    choosePerson({title:"Add a brother or sister", subtitle:"They will share this person’s parents.",
+      exclude:[p.id], seed:p.last}, id => {
+      snapshot();
+      const u = U(uid);
+      if(!u.children.includes(id)) u.children.push(id);
+      commit("Sibling added"); select(id);
+    });
+  }
+};
 
 /* ── person picker ─────────────────────────────────────── */
 function choosePerson(opts, done){
@@ -4102,6 +4153,7 @@ function fileDialog(){
         </fieldset>
         <fieldset><legend>Start over</legend>
           <div style="display:flex;gap:7px;flex-wrap:wrap">
+            <button class="btn sm primary" id="fWizard">Start again, guided</button>
             <button class="btn sm" id="fSample">Load the sample family</button>
             <button class="btn sm danger" id="fClear">Clear everything</button>
           </div>
@@ -4127,6 +4179,7 @@ function fileDialog(){
     closeModal();
   });
   $("#fPaste").addEventListener("click", () => { closeModal(); pasteDialog(); });
+  $("#fWizard").addEventListener("click", () => { closeModal(); startWizard(); });
   $("#fSample").addEventListener("click", () => { closeModal(); loadSample(); });
   $("#fClear").addEventListener("click", () => {
     closeModal();
@@ -5212,6 +5265,9 @@ function save(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     try {
+      const tag = $("#savedTag");
+      if(tag){ tag.classList.add("show"); clearTimeout(save.t);
+               save.t = setTimeout(() => tag.classList.remove("show"), 1400); }
       localStorage.setItem(KEY, JSON.stringify({data:S, ui:{
         view:ui.view, mode:ui.mode, focus:ui.focus, style:ui.style,
         gens:ui.gens, softInlaw:ui.softInlaw, dates:ui.dates,
@@ -5283,8 +5339,9 @@ let userMoved = false;             // has the reader panned or zoomed yet
                cx:(a.x+b.x)/2, cy:(a.y+b.y)/2, tx:ui.tx, ty:ui.ty};
       drag = null; return;
     }
-    const node = e.target.closest(".node");
-    drag = {x:e.clientX, y:e.clientY, tx:ui.tx, ty:ui.ty, moved:false, node};
+    const handle = e.target.closest(".handle");
+    const node = handle ? null : e.target.closest(".node");
+    drag = {x:e.clientX, y:e.clientY, tx:ui.tx, ty:ui.ty, moved:false, node, handle};
   });
   svg.addEventListener("pointermove", e => {
     if(pointers.has(e.pointerId)) pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
@@ -5307,7 +5364,11 @@ let userMoved = false;             // has the reader panned or zoomed yet
     pointers.delete(e.pointerId);
     if(pointers.size < 2) pinch = null;
     if(drag && !drag.moved){
-      if(drag.node) select(drag.node.dataset.id);
+      if(drag.handle){
+        const p = ui.sel && P(ui.sel);
+        if(p && RELATE[drag.handle.dataset.act]) RELATE[drag.handle.dataset.act](p);
+      }
+      else if(drag.node) select(drag.node.dataset.id);
       else if(ui.sel){ ui.sel = null; renderRail(); renderInspector(); drawChart(); }
     }
     drag = null; svg.classList.remove("panning");
@@ -5393,6 +5454,7 @@ $("#btnFocus").addEventListener("click", () => {
 });
 $("#btnAdd").addEventListener("click", () => addFlow());
 $("#emptyAdd").addEventListener("click", () => addFlow());
+$("#emptyStart").addEventListener("click", startWizard);
 $("#emptySample").addEventListener("click", () => loadSample());
 $("#flagSend").addEventListener("click", sendBackDialog);
 $("#flagClear").addEventListener("click", () => {
@@ -5483,6 +5545,147 @@ $("#btnTheme").addEventListener("click", () => {
 window.matchMedia("(prefers-color-scheme:dark)")
   .addEventListener("change", () => { if(!document.documentElement.getAttribute("data-theme")) drawChart(); });
 $("#btnHelp").addEventListener("click", helpDialog);
+
+/* ── guided start ──────────────────────────────────────────
+   Every genealogy guide says the same thing: begin with
+   yourself and work outwards. One question at a time, nothing
+   compulsory, and a real tree at the end of it.
+   ──────────────────────────────────────────────────────── */
+function startWizard(){
+  const answers = {me:{}, father:"", mother:"", partner:"", children:[""]};
+  let step = 0;
+
+  const NAME_HINT = "First name and family name, e.g. Jagdish Prasad Sharma";
+  const steps = [
+    {
+      title:"Let’s start with you",
+      note:"Everything else hangs off this. You can change any of it later.",
+      body:() => `
+        <div class="fgrid two">
+          <label class="f"><span>Your first name</span>
+            <input id="wFirst" value="${esc(answers.me.first || "")}" placeholder="Jagdish Prasad"></label>
+          <label class="f"><span>Your family name</span>
+            <input id="wLast" value="${esc(answers.me.last || "")}" placeholder="Sharma"></label>
+        </div>
+        <label class="f" style="margin-top:10px"><span>Year you were born <em style="color:var(--ink-3)">— optional</em></span>
+          <input id="wBirth" value="${esc(answers.me.birth || "")}" placeholder="1978"></label>`,
+      read:() => {
+        answers.me.first = $("#wFirst").value.trim();
+        answers.me.last  = $("#wLast").value.trim();
+        answers.me.birth = $("#wBirth").value.trim();
+        return answers.me.first || answers.me.last ? null : "Please put in a name to start with.";
+      }
+    },
+    {
+      title:"Your parents",
+      note:"Leave either one blank if you would rather not say, or do not know.",
+      body:() => `
+        <label class="f"><span>Father’s name</span>
+          <input id="wFather" value="${esc(answers.father)}" placeholder="${esc(NAME_HINT)}"></label>
+        <label class="f" style="margin-top:10px"><span>Mother’s name</span>
+          <input id="wMother" value="${esc(answers.mother)}" placeholder="Her name, as she was known"></label>`,
+      read:() => {
+        answers.father = $("#wFather").value.trim();
+        answers.mother = $("#wMother").value.trim();
+        return null;
+      }
+    },
+    {
+      title:"Your husband or wife",
+      note:"Skip this if it does not apply.",
+      body:() => `
+        <label class="f"><span>Their name</span>
+          <input id="wPartner" value="${esc(answers.partner)}" placeholder="${esc(NAME_HINT)}"></label>`,
+      read:() => { answers.partner = $("#wPartner").value.trim(); return null; }
+    },
+    {
+      title:"Your children",
+      note:"One per line. Leave it blank if there are none yet.",
+      body:() => `
+        <label class="f"><span>Names</span>
+          <textarea id="wKids" style="min-height:110px" placeholder="One name on each line">${esc(answers.children.join("\n"))}</textarea></label>`,
+      read:() => {
+        answers.children = $("#wKids").value.split("\n").map(s => s.trim()).filter(Boolean);
+        return null;
+      }
+    }
+  ];
+
+  function splitName(t, fallbackLast){
+    const parts = String(t || "").trim().split(/\s+/).filter(Boolean);
+    if(!parts.length) return null;
+    const last = parts.length > 1 ? parts.pop() : (fallbackLast || "");
+    return {first:parts.join(" "), last};
+  }
+
+  function finish(){
+    snapshot();
+    S = blankDoc();
+    resetHeading();
+    const surname = answers.me.last;
+    const me = addPerson({first:answers.me.first, last:answers.me.last, birth:answers.me.birth});
+
+    const f = splitName(answers.father, surname);
+    const m = splitName(answers.mother, "");
+    if(f || m){
+      const u = U(parentUnion(me, true));
+      if(f) u.a = addPerson(Object.assign({sex:"M"}, f));
+      if(m) u.b = addPerson(Object.assign({sex:"F"}, m));
+    }
+    let myUnion = null;
+    const sp = splitName(answers.partner, "");
+    if(sp) myUnion = addUnion(me, addPerson(sp));
+    for(const line of answers.children){
+      const k = splitName(line, surname);
+      if(!k) continue;
+      if(!myUnion) myUnion = addUnion(me, null);
+      U(myUnion).children.push(addPerson(k));
+    }
+    ui.isSample = false; ORIGIN = null; ui.sel = me; ui.focus = null;
+    ui.mode = "desc"; setMode("desc");
+    ui.focus = defaultFocus("desc");
+    closeModal();
+    save(); render(); fitView();
+    toast("Your family has a start — tap anyone and use ＋ to add more");
+  }
+
+  function draw(){
+    const st = steps[step];
+    openModal(`
+      <div class="modal" style="width:min(100%,470px)">
+        <div class="modal-head"><div style="flex:1">
+          <div class="mono" style="font-size:9.5px;letter-spacing:.16em;color:var(--ink-3);text-transform:uppercase;margin-bottom:5px">
+            Step ${step + 1} of ${steps.length}</div>
+          <h2>${esc(st.title)}</h2><p>${esc(st.note)}</p>
+        </div></div>
+        <div class="modal-body">${st.body()}
+          <div class="wizbar">${steps.map((_, i) =>
+            `<span class="wizdot${i <= step ? " on" : ""}"></span>`).join("")}</div>
+        </div>
+        <div class="modal-foot">
+          ${step ? `<button class="btn" id="wBack">Back</button>` : ""}
+          <span class="spring"></span>
+          ${step < steps.length - 1 ? `<button class="btn" id="wSkip">Skip</button>` : ""}
+          <button class="btn primary" id="wNext">${step < steps.length - 1 ? "Next" : "Build my tree"}</button>
+        </div>
+      </div>`);
+    const go = dir => {
+      const err = steps[step].read();
+      if(err && dir > 0) return toast(err, true);
+      step += dir;
+      if(step >= steps.length) return finish();
+      draw();
+    };
+    $("#wNext").addEventListener("click", () => go(1));
+    if($("#wBack")) $("#wBack").addEventListener("click", () => go(-1));
+    if($("#wSkip")) $("#wSkip").addEventListener("click", () => { steps[step].read(); step++; draw(); });
+    const first = $("#modalMount").querySelector("input,textarea");
+    if(first) first.addEventListener("keydown", e => {
+      if(e.key === "Enter" && e.target.tagName !== "TEXTAREA"){ e.preventDefault(); go(1); }
+    });
+  }
+  draw();
+}
 
 function helpDialog(){
   openModal(`<div class="modal" style="width:min(100%,500px)">
