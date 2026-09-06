@@ -104,8 +104,12 @@ button{cursor:pointer;background:none;border:0;padding:0}
     height:auto; flex-wrap:wrap; align-content:center;
     padding:9px 10px; gap:10px; row-gap:9px;
   }
-  .bar .seg{order:10; width:100%; padding:3px}
+  /* second row: the view switcher, with "whose tree" beside it — without it
+     there is no way to change who the chart is drawn around on a phone */
+  .bar .seg{order:10; flex:1 1 auto; min-width:0; padding:3px}
   .bar .seg button{flex:1; justify-content:center; padding:6px 4px}
+  .bar #btnFocus{order:11; max-width:44%; padding:7px 9px}
+  .bar #btnFocus span{max-width:100%}
   .bar .bar-sep{display:none}
 }
 .brand{display:flex;align-items:baseline;gap:9px;flex:0 0 auto;padding-right:4px}
@@ -691,7 +695,7 @@ kbd{
       </select>
       <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 6.5 8 10.5l4-4"/></svg>
     </span>
-    <button class="btn hide-narrow" id="btnFocus" title="Choose whose tree to draw">
+    <button class="btn" id="btnFocus" title="Choose whose tree to draw">
       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="5.5" r="2.8"/><path d="M2.8 13.5a5.2 5.2 0 0 1 10.4 0" stroke-linecap="round"/></svg>
       <span id="focusName">—</span>
     </button>
@@ -879,7 +883,7 @@ const FAM = {ui:'"Public Sans","Noto Sans Devanagari",sans-serif',
 
 /* ── state ─────────────────────────────────────────────── */
 const KEY = "heirloom.v1";
-const BUILD = "2026-09-06f";   // shown in Help, so a stale cached copy is obvious
+const BUILD = "2026-09-06g";   // shown in Help, so a stale cached copy is obvious
 let S = blankDoc();
 let ui = {
   view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
@@ -981,6 +985,37 @@ function birthKey(pid){
   return d ? d.y * 10000 + (d.m || 0) * 100 + (d.d || 0) : 99999999;
 }
 const byBirth = (a, b) => birthKey(a) - birthKey(b);
+
+/** How many people descend from someone. */
+function descendantCount(idx, pid, seen){
+  seen = seen || new Set();
+  if(seen.has(pid)) return 0;
+  seen.add(pid);
+  let n = 0;
+  for(const uid of (idx[pid] ? idx[pid].unions : []))
+    for(const k of (U(uid).children || []))
+      if(S.people[k]) n += 1 + descendantCount(idx, k, seen);
+  return n;
+}
+/**
+ * Who the chart is drawn around when nobody has said. Sorting by date alone
+ * put the wrong half of a couple at the head, because a missing year sorts
+ * last — so whichever of them happened to have a date recorded won. The line
+ * with the most descendants comes first, and between two people at the head
+ * of the same line, whoever was written down first: that is almost always the
+ * one whose family it is thought of as.
+ */
+function defaultFocus(mode){
+  const idx = buildIndex(), ids = Object.keys(S.people);
+  if(!ids.length) return null;
+  if(mode === "anc") return ids.slice().sort((a, b) => byBirth(b, a))[0];
+  const rooted = ids.filter(id => !idx[id].childOf);
+  const pool = rooted.length ? rooted : ids;
+  const order = {}; ids.forEach((id, i) => { order[id] = i; });
+  const desc = {}; pool.forEach(id => { desc[id] = descendantCount(idx, id); });
+  return pool.slice().sort((a, b) =>
+    (desc[b] - desc[a]) || (order[a] - order[b]))[0];
+}
 /** Years lived, or years so far. Inexact when only a year is known. */
 function ageOf(p){
   const b = parseDate(p.birth);
@@ -2412,10 +2447,8 @@ function fanView(pal){
   const anc = ui.mode === "anc";
   let rootId = ui.focus && P(ui.focus) ? ui.focus : null;
   if(!rootId){
-    const ids = Object.keys(S.people);
-    if(!ids.length) return null;
-    rootId = anc ? ids.slice().sort((a,b) => byBirth(b, a))[0]
-                 : ids.filter(id => !idx[id].childOf).sort(byBirth)[0] || ids[0];
+    rootId = defaultFocus(anc ? "anc" : "desc");
+    if(!rootId) return null;
   }
   const MAXD = 7;
   const seen = new Set();
@@ -5336,13 +5369,7 @@ function setMode(m){
   const sel = $("#scope");
   if(sel) sel.value = m;
   if((m === "desc" || m === "anc") && !ui.focus){
-    const idx = buildIndex(), ids = Object.keys(S.people);
-    if(ids.length){
-      ui.focus = m === "anc"
-        ? ids.slice().sort((a,b) => byBirth(b, a))[0]
-        : ids.filter(id => !idx[id].childOf).sort((a,b) =>
-            byBirth(a, b))[0] || ids[0];
-    }
+    ui.focus = defaultFocus(m);
   }
   save();
 }
