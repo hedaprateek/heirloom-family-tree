@@ -35,6 +35,20 @@ chart (a faint dashed line runs to them rather than duplicating the card).
 Scope it to the **descendants** of a chosen person, their **ancestors**, or
 **everyone** with unconnected families side by side.
 
+**Speak instead of typing.** A microphone sits in the name, place, occupation and
+notes fields. Someone who will happily talk about their family for an hour and
+type none of it can simply say it. It uses the browser's own recogniser — nothing
+to install — and does not appear where it is unsupported.
+
+**One question at a time.** From the *To fill in* tab, **Answer these one at a
+time** asks plainly — *"When was Kamala born?"* — with a big field, a microphone,
+and a *Do not know* button. Anyone can work through it without understanding the
+app at all.
+
+**Dates tab.** Birthdays and wedding anniversaries from today forward, with ages
+and years married, plus **Family facts** — longest life, eldest living, most
+children, longest marriage, and where most of the family came from.
+
 **Still to fill in.** The second tab in the people list is a to-do list built
 from the data — *Aisha Deshmukh · family not recorded*, *Anya Iyer · no work* —
 sorted worst first, with a count on the tab. Tap one to go straight there. A
@@ -132,6 +146,27 @@ the chart itself: anyone reached as a partner rather than by descent from
 whoever the chart is drawn around. Change the focus person and it re-reckons.
 The last button beside the zoom controls turns the effect off and shows
 everyone the same.
+
+## Flex banners for a function
+
+**Print &#9656; Printing on &#9656; Flex banner.** A shop quotes in feet, prints one
+piece, and wants far less resolution than paper — this speaks that language.
+
+- **Sizes in feet** — 3×2 up to 12×6, or type your own. No tiling.
+- **The right file.** A **PDF at 1:10** is the best thing to hand over: vector,
+  sharp at any size, small enough to send on WhatsApp. Full-size PDF and PNG are
+  there too, at **72–150 dpi** — flex is printed low, and 300 dpi is a gigantic
+  file for no gain.
+- **Bleed and keep-clear.** Bleed is added outside the trim with corner marks; the
+  keep-clear inset stops names being punched through by eyelets, which go in every
+  2 ft.
+- **It tells you whether it will be readable.** *"Names print 7 mm tall — readable
+  from about 0.8 m"*, and it warns when that is too close for a hall.
+- **A big QR in the corner**, so guests scan the banner and add themselves during
+  the function.
+
+Colour caveat: everything exported is RGB. The print shop's machine converts to
+CMYK, so the green comes out duller and the brass flatter.
 
 ## Printing
 
@@ -240,6 +275,12 @@ collecting and everyone gets the combined tree.
 If you would rather everyone typed into one place, a spreadsheet works too —
 see above — or say the word and we can talk about what a real shared backend
 would take.
+
+## A family book
+
+**Print &#9656; What to print &#9656; A page for each person** turns the tree into a
+booklet: one page each, with photo, dates, age, how they are related, parents,
+marriages, children and notes, numbered through.
 
 ## Writing in Hindi
 

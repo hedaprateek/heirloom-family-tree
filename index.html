@@ -185,9 +185,10 @@ button{cursor:pointer;background:none;border:0;padding:0}
   display:flex;align-items:center;justify-content:space-between;
   font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
 }
+.bar,.rail,.insp{zoom:var(--chrome-zoom,1)}
 .rail-tabs{display:flex;gap:2px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:2px}
 .rail-tabs button{
-  flex:1;padding:5px 6px;border-radius:6px;font-size:12px;font-weight:500;color:var(--ink-2);
+  flex:1;padding:5px 4px;font-size:11.5px;border-radius:6px;font-size:12px;font-weight:500;color:var(--ink-2);
   display:inline-flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;
 }
 .rail-tabs button[aria-pressed="true"]{background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 1px 2px var(--shade)}
@@ -363,6 +364,16 @@ label.f .hint{font-size:10.5px;color:var(--ink-3);margin-top:3px;font-family:var
 }
 .saved.show{opacity:1}
 /* one-tap headings built from the family's own name */
+.withmic{position:relative;display:block}
+.withmic input,.withmic textarea{padding-right:32px}
+.mic{
+  position:absolute;right:6px;top:6px;width:24px;height:24px;border-radius:6px;
+  display:grid;place-items:center;color:var(--ink-3);background:transparent;
+}
+.withmic textarea + .mic{top:8px}
+.mic:hover{color:var(--accent-2);background:var(--accent-tint)}
+.mic.on{color:#fff;background:var(--danger);animation:micpulse 1s ease-in-out infinite}
+@keyframes micpulse{50%{opacity:.55}}
 .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
 .chip{
   padding:3px 9px;border-radius:999px;border:1px solid var(--line);
@@ -757,6 +768,12 @@ kbd{
       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
       <span class="hide-narrow t">Add person</span>
     </button>
+    <button class="btn icon" id="btnUndo" title="Undo the last change" aria-label="Undo">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 7.4h6.4a3.4 3.4 0 0 1 0 6.8H6.4"/><path d="M5.6 4.6 2.9 7.3l2.7 2.7"/></svg>
+    </button>
+    <button class="btn icon" id="btnText" title="Text size" aria-label="Text size">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1.6 12.6 4.9 3.6l3.3 9M2.7 9.9h4.4M9.6 12.6l2.5-6.6 2.5 6.6M10.4 10.6h3.4"/></svg>
+    </button>
     <button class="btn" id="btnShare" title="Send this family to someone">
       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12.2" cy="3.6" r="2.1"/><circle cx="3.8" cy="8" r="2.1"/><circle cx="12.2" cy="12.4" r="2.1"/><path d="M5.7 7 10.3 4.6M5.7 9l4.6 2.4" stroke-linecap="round"/></svg>
       <span class="hide-narrow t">Share</span>
@@ -787,7 +804,8 @@ kbd{
       </div>
       <div class="rail-tabs" role="group" aria-label="List">
         <button id="tabPeople" aria-pressed="true">Everyone</button>
-        <button id="tabGaps" aria-pressed="false">Still to fill in <span class="gapn" id="gapCount"></span></button>
+        <button id="tabGaps" aria-pressed="false">To fill in <span class="gapn" id="gapCount"></span></button>
+        <button id="tabDates" aria-pressed="false">Dates</button>
       </div>
       <div class="rail-meta"><span id="railCount">0 people</span><span id="railGens">—</span></div>
     </div>
@@ -943,11 +961,11 @@ const FAM = {ui:'"Public Sans","Noto Sans Devanagari",sans-serif',
 
 /* ── state ─────────────────────────────────────────────── */
 const KEY = "heirloom.v1";
-const BUILD = "2026-09-06i";   // shown in Help, so a stale cached copy is obvious
+const BUILD = "2026-09-07a";   // shown in Help, so a stale cached copy is obvious
 let S = blankDoc();
 let ui = {
   view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
-  softInlaw:true, dates:"year", treeStyle:"canopy", railTab:"people", moreOpen:false,
+  softInlaw:true, dates:"year", treeStyle:"canopy", railTab:"people", moreOpen:false, textSize:1,
   z:1, tx:0, ty:0, query:"", isSample:false, dirty:false
 };
 let LAY = null;                 // last computed layout
@@ -3054,6 +3072,74 @@ function findGaps(){
   return out.sort((a, b) => b.n - a.n || fullName(P(a.id)).localeCompare(fullName(P(b.id))));
 }
 
+/* ── the year's own reasons to open this ───────────────── */
+const MONTHS_LONG = MON_LONG;
+/** Birthdays and wedding anniversaries, from today forward. */
+function almanac(){
+  const now = new Date(), today = now.getMonth() * 31 + now.getDate();
+  const out = [];
+  const add = (m, d, kind, who, since, id) => {
+    if(!m) return;
+    const key = (m - 1) * 31 + (d || 1);
+    out.push({key, sort:(key < today ? key + 400 : key), m, d, kind, who, since, id});
+  };
+  for(const id in S.people){
+    const p = P(id), b = parseDate(p.birth);
+    if(b && b.m && !isDead(p)) add(b.m, b.d, "birthday", fullName(p), b.y, id);
+  }
+  for(const uid in S.unions){
+    const u = U(uid), d = parseDate(u.date);
+    if(!d || !d.m || u.divorced) continue;
+    const a = u.a && P(u.a), c = u.b && P(u.b);
+    if(!a || !c) continue;
+    add(d.m, d.d, "anniversary", fullName(a) + " & " + fullName(c), d.y, u.a);
+  }
+  return out.sort((x, y) => x.sort - y.sort);
+}
+/** A few true things about the family, for reading out at a gathering. */
+function familyFacts(){
+  const idx = buildIndex(), ids = Object.keys(S.people), f = [];
+  if(!ids.length) return f;
+  const withAge = ids.map(id => ({id, a:ageOf(P(id))})).filter(x => x.a);
+  const dead = withAge.filter(x => x.a.dead).sort((x, y) => y.a.years - x.a.years);
+  const alive = withAge.filter(x => !x.a.dead).sort((x, y) => y.a.years - x.a.years);
+  if(dead.length) f.push(["Longest life", fullName(P(dead[0].id)) + " — " + dead[0].a.years + " years"]);
+  if(alive.length) f.push(["Eldest living", fullName(P(alive[0].id)) + ", " + alive[0].a.years]);
+  const kids = ids.map(id => ({id, n:idx[id].kids.length})).sort((x, y) => y.n - x.n);
+  if(kids[0] && kids[0].n) f.push(["Most children", fullName(P(kids[0].id)) + " — " + kids[0].n]);
+  let longest = null;
+  for(const uid in S.unions){
+    const u = U(uid), m = parseDate(u.date);
+    if(!m || !u.a || !u.b || u.divorced) continue;
+    const end = [P(u.a), P(u.b)].map(x => parseDate(x.death)).filter(Boolean).sort((a, b) => a.y - b.y)[0];
+    const yrs = (end ? end.y : new Date().getFullYear()) - m.y;
+    if(yrs > 0 && (!longest || yrs > longest.yrs)) longest = {yrs, u};
+  }
+  if(longest) f.push(["Longest marriage",
+    fullName(P(longest.u.a)) + " & " + fullName(P(longest.u.b)) + " — " + longest.yrs + " years"]);
+  const place = commonest(p => p.place);
+  if(place){
+    const n = ids.filter(id => (P(id).place || "").trim() === place).length;
+    f.push(["Most are from", place + " — " + n + " " + (n === 1 ? "person" : "people")]);
+  }
+  const span = yearSpan();
+  if(span) f.push(["The record covers", span]);
+  f.push(["On the chart", ids.length + " people across " + (LAY ? LAY.rows.length : 0) + " generations"]);
+  return f;
+}
+function almanacDialog(){
+  const facts = familyFacts();
+  openModal(`
+    <div class="modal">
+      <div class="modal-head"><div><h2>Family facts</h2>
+        <p>Worked out from what has been filled in so far.</p></div></div>
+      <div class="modal-body"><div class="keys" style="line-height:1.6">
+        ${facts.map(([k, v]) => `<span class="k"><b>${esc(k)}</b></span><span>${esc(v)}</span>`).join("")}
+      </div></div>
+      <div class="modal-foot"><span class="spring"></span><button class="btn primary" data-close>Close</button></div>
+    </div>`);
+}
+
 function renderRail(){
   const list = $("#railList");
   const idx = buildIndex();
@@ -3066,9 +3152,30 @@ function renderRail(){
   $("#gapCount").textContent = gaps.length || "";
   $("#tabPeople").setAttribute("aria-pressed", ui.railTab !== "gaps");
   $("#tabGaps").setAttribute("aria-pressed", ui.railTab === "gaps");
+  $("#tabDates").setAttribute("aria-pressed", ui.railTab === "dates");
+  if(ui.railTab === "dates"){
+    const a = almanac(), now = new Date().getFullYear();
+    list.innerHTML = '<button class="btn sm" id="factsBtn" style="width:100%;margin:4px 0 10px">Family facts</button>'
+      + (a.length
+        ? '<div class="rail-gen">Coming up</div>' + a.slice(0, 40).map(function(x){
+            const yrs = x.since ? now - x.since : 0;
+            const when = (x.d ? x.d + " " : "") + MON_SHORT[x.m - 1];
+            const what = x.kind === "birthday"
+              ? (yrs > 0 ? "turns " + yrs : "birthday")
+              : (yrs > 0 ? yrs + " years married" : "anniversary");
+            return '<button class="gap-row" data-id="' + x.id + '">'
+              + '<span class="dt mono" style="flex:0 0 54px">' + esc(when) + '</span>'
+              + '<span class="nm">' + esc(x.who) + '</span>'
+              + '<span class="what">' + esc(what) + '</span></button>';
+          }).join("")
+        : '<div class="gap-done">No birthdays or anniversaries yet.<br>'
+          + 'Add a full date of birth, or a marriage year, and they gather here.</div>');
+    return;
+  }
   if(ui.railTab === "gaps"){
     list.innerHTML = gaps.length
-      ? `<div class="rail-gen">Anything anyone remembers</div>` + gaps.map(g =>
+      ? `<button class="btn sm primary" id="askAll" style="width:100%;margin:4px 0 10px">Answer these one at a time</button>
+         <div class="rail-gen">Or pick anyone</div>` + gaps.map(g =>
           `<button class="gap-row" data-id="${g.id}">
              <span class="nm">${esc(fullName(P(g.id)))}</span>
              <span class="what">${esc(g.miss.join(" · "))}</span></button>`).join("")
@@ -3146,8 +3253,8 @@ function renderInspector(){
 
   <fieldset><legend>Name</legend>
     <div class="fgrid two">
-      <label class="f"><span>First name</span><input data-fld="first" value="${esc(p.first)}" autocomplete="off"></label>
-      <label class="f"><span>Family name</span><input data-fld="last" value="${esc(p.last)}" autocomplete="off"></label>
+      <label class="f"><span>First name</span><span class="withmic"><input data-fld="first" value="${esc(p.first)}" autocomplete="off">${micFor("first")}</span></label>
+      <label class="f"><span>Family name</span><span class="withmic"><input data-fld="last" value="${esc(p.last)}" autocomplete="off">${micFor("last")}</span></label>
     </div>
   </fieldset>
 
@@ -3161,8 +3268,8 @@ function renderInspector(){
         <span class="hint" data-echo="death">${esc(dateEcho(p.death))}</span></label>
     </div>
     <div class="fgrid" style="margin-top:9px">
-      <label class="f"><span>Place</span><input data-fld="place" value="${esc(p.place)}" placeholder="Nagpur" autocomplete="off"></label>
-      <label class="f"><span>Occupation</span><input data-fld="occupation" value="${esc(p.occupation)}" placeholder="Schoolteacher" autocomplete="off"></label>
+      <label class="f"><span>Place</span><span class="withmic"><input data-fld="place" value="${esc(p.place)}" placeholder="Nagpur" autocomplete="off">${micFor("place")}</span></label>
+      <label class="f"><span>Occupation</span><span class="withmic"><input data-fld="occupation" value="${esc(p.occupation)}" placeholder="Schoolteacher" autocomplete="off">${micFor("occupation")}</span></label>
     </div>
     <div class="hint mono" style="font-size:10.5px;color:var(--ink-3);margin-top:5px">
       A full date, or as much as anyone remembers — 12 Mar 1948, 12/3/1948
@@ -3182,7 +3289,7 @@ function renderInspector(){
       </select></label>
     </div>
     <label class="f" style="margin-top:9px"><span>Notes</span>
-      <textarea data-fld="notes" placeholder="Stories, anecdotes, anything worth keeping.">${esc(p.notes)}</textarea></label>
+      <span class="withmic"><textarea data-fld="notes" placeholder="Stories, anecdotes, anything worth keeping.">${esc(p.notes)}</textarea>${micFor("notes")}</span></label>
     <div class="photo-row" style="margin-top:11px">
       <div class="photo-prev">${p.photo ? `<img src="${esc(p.photo)}" alt="">` : `<span>no<br>photo</span>`}</div>
       <div style="display:flex;flex-direction:column;gap:6px;flex:1">
@@ -3387,6 +3494,12 @@ $("#inspBody").addEventListener("change", e => {
   drawChart(); renderRail();
 });
 $("#inspBody").addEventListener("click", e => {
+  const mic = e.target.closest("[data-mic]");
+  if(mic){
+    const field = mic.parentElement.querySelector("[data-fld]");
+    if(field) dictate(field, mic);
+    return;
+  }
   const btn = e.target.closest("[data-act]"); if(!btn) return;
   const act = btn.dataset.act;
   const p = ui.sel ? P(ui.sel) : null; if(!p) return;
@@ -3468,6 +3581,58 @@ const RELATE = {
     });
   }
 };
+
+/* ── speaking instead of typing ────────────────────────────
+   An older relative will talk about their family for an hour
+   and type none of it. Uses the browser's own recogniser, so
+   there is nothing to install; where it is missing the mic
+   simply never appears.
+   ──────────────────────────────────────────────────────── */
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+const canSpeak = () => !!SpeechRec;
+let listening = null;
+function dictate(input, btn){
+  if(!SpeechRec) return;
+  if(listening){ listening.stop(); listening = null; if(btn) btn.classList.remove("on"); return; }
+  const rec = new SpeechRec();
+  rec.lang = document.documentElement.lang === "hi" ? "hi-IN" : "en-IN";
+  rec.interimResults = true;
+  rec.continuous = false;
+  const before = input.value;
+  rec.onresult = e => {
+    let said = "";
+    for(let i = e.resultIndex; i < e.results.length; i++) said += e.results[i][0].transcript;
+    said = said.trim();
+    if(!said) return;
+    /* a name should not arrive in sentence case with a full stop on the end */
+    if(input.dataset.fld === "first" || input.dataset.fld === "last" || input.dataset.fld === "maiden")
+      said = said.replace(/[.,!?]+$/, "").replace(/\b\w/g, c => c.toUpperCase());
+    input.value = (before ? before.replace(/\s*$/, " ") : "") + said;
+    input.dispatchEvent(new Event("input", {bubbles:true}));
+  };
+  rec.onend = () => {
+    listening = null;
+    if(btn) btn.classList.remove("on");
+    input.dispatchEvent(new Event("change", {bubbles:true}));
+  };
+  rec.onerror = ev => {
+    listening = null;
+    if(btn) btn.classList.remove("on");
+    if(ev.error === "not-allowed") toast("Microphone permission was refused", true);
+    else if(ev.error !== "aborted" && ev.error !== "no-speech") toast("Could not hear anything", true);
+  };
+  try { rec.start(); listening = rec; if(btn) btn.classList.add("on"); toast("Listening — say it now"); }
+  catch(e){ listening = null; }
+}
+/** The little mic that sits inside a field. */
+function micFor(id){
+  return canSpeak()
+    ? `<button class="mic" data-mic="${id}" type="button" title="Speak instead of typing" aria-label="Speak instead of typing">
+         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+           <rect x="6" y="1.8" width="4" height="7.4" rx="2"/>
+           <path d="M3.6 7.2a4.4 4.4 0 0 0 8.8 0M8 11.6v2.6" stroke-linecap="round"/></svg></button>`
+    : "";
+}
 
 /* ── person picker ─────────────────────────────────────── */
 function choosePerson(opts, done){
@@ -3631,6 +3796,9 @@ function pickPhoto(pid){
    PRINT & EXPORT
    ═══════════════════════════════════════════════════════════ */
 let printOpts = {
+  medium:"paper",                       // paper · flex
+  what:"chart",                         // chart · people (one page each)
+  flexW:6, flexH:4, bleedIn:2, safeIn:2, flexOut:"pdf10", flexDpi:100, flexQR:true,
   paper:"A2", orient:"landscape", margin:12,
   fitMode:"fit",                      // fit · wide (n sheets across) · scale (exact %)
   sheetsWide:3, scale:100,
@@ -3647,6 +3815,22 @@ const PRESETS = {
   mural   : {label:"Mural",       hint:"A3 sheets, 3 across",   paper:"A3", orient:"landscape", fitMode:"wide", sheetsWide:3, margin:8, crop:true}
 };
 const TINTS = {white:"#FFFFFF", cream:"#FAF5E9", none:null};
+
+/* ── flex banners ──────────────────────────────────────────
+   A print shop quotes in feet, prints one piece, and wants a
+   far lower resolution than paper — 72–150 dpi at full size,
+   or a 1:10 file for anything wide. Eyelets go in every two
+   feet, so the edges are not safe to put names in.
+   ──────────────────────────────────────────────────────── */
+const FT_MM = 304.8, IN_MM = 25.4;
+const FLEX_SIZES = [[3,2],[4,3],[5,3],[6,4],[8,4],[8,5],[10,6],[12,6]];
+const FLEX_DPI = [72, 100, 150];
+/** Cap height of a name at this scale, and how far off it stays readable. */
+function legibility(scale){
+  const capMM = 13 * 0.7 * scale / MM;          // 13px name, cap ≈ .7 of that
+  const feet = capMM / IN_MM * 10;              // one inch of letter per ten feet
+  return {mm:capMM, m:feet * 0.3048, feet};
+}
 
 /** the register palette, dropped to greys when printing in one ink */
 function greyPal(p){
@@ -3696,7 +3880,46 @@ function printDialog(){
             </div>
           </fieldset>
 
-          <fieldset><legend>Paper</legend>
+          <fieldset><legend>Printing on</legend>
+            <div class="seg" style="width:100%">
+              <button id="mPaper" aria-pressed="${printOpts.medium!=="flex"}" style="flex:1">Paper</button>
+              <button id="mFlex" aria-pressed="${printOpts.medium==="flex"}" style="flex:1">Flex banner</button>
+            </div>
+            <label class="f" style="margin-top:10px"><span>What to print</span><select id="pWhat">
+              <option value="chart"${printOpts.what!=="people"?" selected":""}>The ${esc(VIEW_NAME[ui.view].toLowerCase())}</option>
+              <option value="people"${printOpts.what==="people"?" selected":""}>A page for each person — a family book</option>
+            </select></label>
+          </fieldset>
+
+          <fieldset id="flexBlock"><legend>Banner</legend>
+            <div class="presets">
+              ${FLEX_SIZES.map(([w,h]) => `<button class="preset" data-flex="${w}x${h}">
+                <b>${w} × ${h} ft</b><span>${(w*h)} sq ft</span></button>`).join("")}
+            </div>
+            <div class="fgrid two" style="margin-top:10px">
+              <label class="f"><span>Width (feet)</span><input id="pFlexW" type="number" min="1" max="30" step="0.5" value="${printOpts.flexW}"></label>
+              <label class="f"><span>Height (feet)</span><input id="pFlexH" type="number" min="1" max="20" step="0.5" value="${printOpts.flexH}"></label>
+            </div>
+            <div class="fgrid two" style="margin-top:9px">
+              <label class="f"><span>Bleed (inches)</span><input id="pBleed" type="number" min="0" max="6" step="0.5" value="${printOpts.bleedIn}">
+                <span class="hint">extra all round, trimmed off</span></label>
+              <label class="f"><span>Keep clear (inches)</span><input id="pSafe" type="number" min="0" max="8" step="0.5" value="${printOpts.safeIn}">
+                <span class="hint">eyelets go every 2 ft</span></label>
+            </div>
+            <div class="fgrid two" style="margin-top:9px">
+              <label class="f"><span>File for the shop</span><select id="pFlexOut">
+                <option value="pdf10"${printOpts.flexOut==="pdf10"?" selected":""}>PDF at 1:10 — best</option>
+                <option value="pdffull"${printOpts.flexOut==="pdffull"?" selected":""}>PDF at full size</option>
+                <option value="png"${printOpts.flexOut==="png"?" selected":""}>PNG at full size</option>
+              </select></label>
+              <label class="f"><span>Image resolution</span><select id="pFlexDpi">
+                ${FLEX_DPI.map(d => `<option value="${d}"${printOpts.flexDpi==d?" selected":""}>${d} dpi</option>`).join("")}
+              </select><span class="hint">flex is printed low — 300 is waste</span></label>
+            </div>
+            <label class="checkline" style="margin-top:8px"><input type="checkbox" id="pFlexQR"${printOpts.flexQR?" checked":""}> Big QR in the corner, so guests can add themselves</label>
+          </fieldset>
+
+          <fieldset id="paperBlock"><legend>Paper</legend>
             <div class="fgrid two">
               <label class="f"><span>Size</span><select id="pPaper">
                 ${Object.keys(PAPERS).map(k => `<option value="${k}"${printOpts.paper===k?" selected":""}>${k}${k.startsWith("A")?" · "+PAPERS[k][0]+"×"+PAPERS[k][1]+"mm":""}</option>`).join("")}
@@ -3737,7 +3960,7 @@ function printDialog(){
                 <option value="none"${printOpts.tint==="none"?" selected":""}>None (transparent export)</option>
               </select></label>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin-top:9px">
+            <div id="inkPaperRow" style="display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;margin-top:9px">
               <label class="checkline"><input type="checkbox" id="pFrame"${printOpts.frame?" checked":""}> Frame rule</label>
               <label class="checkline"><input type="checkbox" id="pLegend"${printOpts.legend?" checked":""}> Symbol key</label>
               <label class="checkline"><input type="checkbox" id="pStamp"${printOpts.stamp?" checked":""}> Date printed</label>
@@ -3811,9 +4034,23 @@ function printDialog(){
     printOpts.crop    = $("#pCrop").checked;
     printOpts.guide   = $("#pGuide").checked;
     printOpts.qr      = $("#pQR").checked;
+    printOpts.what    = $("#pWhat").value;
+    printOpts.flexW   = clamp(+$("#pFlexW").value || 6, 1, 30);
+    printOpts.flexH   = clamp(+$("#pFlexH").value || 4, 1, 20);
+    printOpts.bleedIn = clamp(+$("#pBleed").value || 0, 0, 6);
+    printOpts.safeIn  = clamp(+$("#pSafe").value  || 0, 0, 8);
+    printOpts.flexOut = $("#pFlexOut").value;
+    printOpts.flexDpi = +$("#pFlexDpi").value || 100;
+    printOpts.flexQR  = $("#pFlexQR").checked;
     printOpts.title   = $("#pTitle").value;
     printOpts.subtitle= $("#pSub").value;
     printOpts.note    = $("#pNote").value;
+    const flex = printOpts.medium === "flex";
+    $("#flexBlock").style.display  = flex ? "" : "none";
+    $("#paperBlock").style.display = flex ? "none" : "";
+    $("#inkPaperRow").style.display = flex ? "none" : "";
+    if(flex && (printOpts.flexQR || printOpts.qr) && !printOpts.qrUrl)
+      shareURL({photos:false, view:ui.view}).then(u => { printOpts.qrUrl = u; });
     /* a heading left at its suggestion is not stored, so it keeps following
        the family rather than freezing on whoever was loaded first */
     S.meta = Object.assign({}, S.meta, {
@@ -3833,6 +4070,13 @@ function printDialog(){
   $$("#modalMount input, #modalMount select").forEach(el => {
     el.addEventListener("input", read); el.addEventListener("change", read);
   });
+  $("#mPaper").addEventListener("click", () => { printOpts.medium = "paper"; closeModal(); printDialog(); });
+  $("#mFlex").addEventListener("click",  () => { printOpts.medium = "flex";  closeModal(); printDialog(); });
+  $$("#modalMount [data-flex]").forEach(b => b.addEventListener("click", () => {
+    const [w, h] = b.dataset.flex.split("x").map(Number);
+    $("#pFlexW").value = w; $("#pFlexH").value = h;
+    read(); toast(w + " × " + h + " ft banner");
+  }));
   $$("#modalMount [data-fill]").forEach(b => b.addEventListener("click", () => {
     const f = $("#" + b.dataset.fill);
     f.value = b.textContent;
@@ -3914,6 +4158,7 @@ function resetHeading(){
 
 /** Work out the sheet grid for the current options. */
 function planSheets(){
+  if(printOpts.medium === "flex") return planFlex();
   const [pw0, ph0] = PAPERS[printOpts.paper];
   const land = printOpts.orient === "landscape";
   const pageW = (land ? Math.max(pw0, ph0) : Math.min(pw0, ph0)) * MM;
@@ -3932,7 +4177,7 @@ function planSheets(){
   if(printOpts.fitMode === "fit"){
     const scale = Math.min(availW / box.w, availH / box.h);
     return {pageW, pageH, m, footH, hasTitle, box, model, scale, cols:1, rows:1, tiled:false,
-            availW, availH, over:0};
+            availW, availH, over:0, k:1};
   }
   const over  = printOpts.overlap * MM;
   const stepW = Math.max(40, availW - over), stepH = Math.max(40, availH - over);
@@ -3942,7 +4187,28 @@ function planSheets(){
   const cols = Math.max(1, Math.ceil((box.w * scale - over) / stepW));
   const rows = Math.max(1, Math.ceil((box.h * scale - over) / stepH));
   return {pageW, pageH, m, footH, hasTitle, box, model, scale, cols, rows, tiled:true,
-          availW, availH, stepW, stepH, over};
+          availW, availH, stepW, stepH, over, k:1};
+}
+
+/** One piece, sized in feet, with bleed round the outside and eyelets in mind. */
+function planFlex(){
+  const at10 = printOpts.flexOut === "pdf10";
+  const k = at10 ? 0.1 : 1;                       // shops take a 1:10 file happily
+  const bleed = printOpts.bleedIn * IN_MM * MM * k;
+  const safe  = printOpts.safeIn  * IN_MM * MM * k;
+  const trimW = printOpts.flexW * FT_MM * MM * k;
+  const trimH = printOpts.flexH * FT_MM * MM * k;
+  const pageW = trimW + bleed * 2, pageH = trimH + bleed * 2;
+  const hasTitle = !!(printOpts.title || printOpts.subtitle);
+  const footH = 0;
+  const model = makeModel(printPal()) || LAY;
+  const box = boxWithTitle(model, hasTitle);
+  const inset = bleed + safe;
+  const availW = pageW - inset * 2, availH = pageH - inset * 2;
+  const scale = Math.min(availW / box.w, availH / box.h);
+  return {flex:true, at10, k, bleed, safe, trimW, trimH,
+          pageW, pageH, m:inset, footH, hasTitle, box, model, scale,
+          cols:1, rows:1, tiled:false, availW, availH, over:0};
 }
 
 function paintPreview(){
@@ -3974,6 +4240,30 @@ function paintPreview(){
   const guide = plan.tiled && printOpts.guide && n > 1 ? 1 : 0;
   /* names print legibly at roughly a third of on-screen size and up */
   const tight = plan.scale < 0.34;
+
+  if(plan.flex){
+    /* at 1:10 the drawing is a tenth the size, so judge legibility full-size */
+    const leg = legibility(plan.scale / plan.k);
+    const pxW = Math.round(printOpts.flexW * 12 * printOpts.flexDpi);
+    const pxH = Math.round(printOpts.flexH * 12 * printOpts.flexDpi);
+    const mb = (pxW * pxH * 3 / 1048576);
+    const out = printOpts.flexOut;
+    $("#prevNote").innerHTML =
+      `<b>${printOpts.flexW} × ${printOpts.flexH} ft</b> banner`
+      + (printOpts.bleedIn ? ` · ${printOpts.bleedIn}in bleed` : "")
+      + `<br>names print <b>${leg.mm.toFixed(0)} mm</b> tall — readable from about
+         <b>${leg.m.toFixed(1)} m</b>`
+      + (leg.m < 2 ? ` <span style="color:var(--danger)">(close for a hall — fewer people, or a bigger banner)</span>` : "")
+      + `<br><span style="opacity:.75">`
+      + (out === "png"
+          ? `PNG ${pxW.toLocaleString()} × ${pxH.toLocaleString()} px at ${printOpts.flexDpi} dpi, roughly ${mb.toFixed(0)} MB`
+          : out === "pdf10"
+            ? `PDF at 1:10 — the shop scales it back up, stays sharp, small file`
+            : `PDF at full size — ${(printOpts.flexW*12)}in × ${(printOpts.flexH*12)}in`)
+      + `</span>`;
+    return;
+  }
+
   $("#prevNote").innerHTML = plan.tiled
     ? `<b>${n} sheet${n>1?"s":""}</b>${guide ? " + assembly sheet" : ""} — ${plan.cols} across × ${plan.rows} down<br>`
       + `assembled: <b>${cm(plan.cols*plan.pageW)} × ${cm(plan.rows*plan.pageH)} cm</b> `
@@ -4076,7 +4366,89 @@ function buildPrintSheets(){
     </div>`;
   }
 
-  if(!plan.tiled){
+  /* a family book: one page per person, in the order the register walks them */
+  if(printOpts.what === "people" && !plan.flex){
+    const idx = buildIndex();
+    const order = (plan.model.hits || plan.model.nodes || []).map(n => n.pid)
+      .filter((v, i, a) => v && a.indexOf(v) === i);
+    for(const id of Object.keys(S.people)) if(!order.includes(id)) order.push(id);
+    const pad = plan.m;
+    order.forEach((id, n) => {
+      const p = P(id), i = idx[id] || {parents:[], unions:[], kids:[]};
+      const a = ageOf(p);
+      const rows = [
+        ["Born", fmtDate(parseDate(p.birth), "long") || "—"],
+        ["Died", fmtDate(parseDate(p.death), "long") || (p.dead ? "—" : "")],
+        ["Age", a ? (a.dead ? "died aged " : "") + (a.exact ? "" : "about ") + a.years : ""],
+        ["Place", p.place],
+        ["Occupation", p.occupation],
+        ["Parents", i.parents.map(q => fullName(P(q))).join(" & ")],
+        ["Married", i.unions.map(uid => {
+          const u = U(uid), sp = partnerOf(u, id);
+          return (sp && P(sp) ? fullName(P(sp)) : "—") + (yearOf(u.date) ? ", " + yearOf(u.date) : "")
+               + (u.divorced ? " (divorced)" : "");
+        }).join("; ")],
+        ["Children", i.kids.slice().sort(byBirth).map(k => fullName(P(k))).join(", ")]
+      ].filter(r => r[1]);
+      html += `<div class="sheet" style="width:${plan.pageW}px;height:${plan.pageH}px">
+        <div style="position:absolute;left:${pad}px;top:${pad}px;right:${pad}px;bottom:${pad}px;
+                    display:flex;flex-direction:column">
+          <div style="display:flex;gap:20px;align-items:flex-start">
+            ${p.photo ? `<img src="${esc(p.photo)}" alt="" style="width:96px;height:96px;object-fit:cover;
+                 border-radius:50%;border:1px solid ${pal.line2};flex:0 0 auto">` : ""}
+            <div style="flex:1;min-width:0">
+              <div class="ptitle" style="font-size:30px;line-height:1.15">${esc(fullName(p))}</div>
+              ${p.maiden ? `<div class="psub" style="font-size:13px;font-style:italic;margin-top:3px">née ${esc(p.maiden)}</div>` : ""}
+              <div class="psub" style="font-size:12px;margin-top:5px">${esc(relationLine(id))}</div>
+            </div>
+          </div>
+          <div class="rule" style="margin:16px 0 18px"></div>
+          <div style="display:grid;grid-template-columns:118px 1fr;gap:9px 16px;font:400 12.5px ${FAM.ui};color:${pal.ink}">
+            ${rows.map(([k, v]) =>
+              `<div style="font:400 9.5px ${FAM.mono};letter-spacing:.13em;text-transform:uppercase;color:${pal.ink3};padding-top:2px">${esc(k)}</div>
+               <div>${esc(v)}</div>`).join("")}
+          </div>
+          ${p.notes ? `<div style="margin-top:20px">
+             <div style="font:400 9.5px ${FAM.mono};letter-spacing:.13em;text-transform:uppercase;color:${pal.ink3};margin-bottom:6px">Notes</div>
+             <div style="font:400 12.5px/1.7 ${FAM.ui};color:${pal.ink};white-space:pre-wrap">${esc(p.notes)}</div></div>` : ""}
+          <div style="margin-top:auto;padding-top:14px;border-top:1px solid ${pal.line}">
+            <div class="pfoot" style="font-size:8.5px;color:${pal.ink3}">
+              <span>${esc(printOpts.title || guessTitle())}</span><span>${n + 1} of ${order.length}</span></div>
+          </div>
+        </div>
+      </div>`;
+    });
+    root.className = printOpts.ink === "mono" ? "ink-mono" : "";
+    root.innerHTML = html;
+    return plan;
+  }
+
+  if(plan.flex){
+    const ox = plan.m + (plan.availW - drawnW) / 2;
+    const oy = plan.m + (plan.availH - drawnH) / 2;
+    const q = printOpts.flexQR ? qrShape(printOpts.qrUrl, 3) : null;
+    const qpx = plan.trimW * 0.11;
+    html += `<div class="sheet" style="width:${plan.pageW}px;height:${plan.pageH}px">
+      <div style="position:absolute;left:${ox.toFixed(1)}px;top:${oy.toFixed(1)}px">${svgFor(drawnW, drawnH)}</div>
+      ${printOpts.frame ? `<div style="position:absolute;left:${plan.m}px;top:${plan.m}px;
+          right:${plan.m}px;bottom:${plan.m}px;border:${(2*plan.k).toFixed(2)}px solid ${pal.brass}"></div>` : ""}
+      ${q ? `<div style="position:absolute;right:${(plan.m).toFixed(1)}px;bottom:${(plan.m).toFixed(1)}px;text-align:center">
+          <svg width="${qpx.toFixed(0)}" height="${qpx.toFixed(0)}" viewBox="0 0 ${q.size} ${q.size}">
+            <rect width="${q.size}" height="${q.size}" fill="#fff"/><path d="${q.d}" fill="#141C22"/></svg>
+          <div style="font:400 ${(qpx*0.075).toFixed(1)}px ${FAM.mono};color:${pal.ink2};margin-top:${(qpx*0.03).toFixed(1)}px">
+            scan to add yourself</div></div>` : ""}
+      ${printOpts.note ? `<div style="position:absolute;left:${plan.m}px;bottom:${plan.m}px;
+          font:400 ${(plan.trimW*0.011).toFixed(1)}px ${FAM.mono};color:${pal.ink3}">${esc(printOpts.note)}</div>` : ""}
+      ${plan.bleed ? [[0,0],[1,0],[0,1],[1,1]].map(([cx,cy]) =>
+          `<div class="crop" style="left:${(cx ? plan.pageW - plan.bleed - 1 : plan.bleed).toFixed(1)}px;
+             top:${(cy ? plan.pageH - plan.bleed - 20*plan.k : plan.bleed).toFixed(1)}px;
+             width:1px;height:${(20*plan.k).toFixed(1)}px"></div>
+           <div class="crop" style="left:${(cx ? plan.pageW - plan.bleed - 20*plan.k : plan.bleed).toFixed(1)}px;
+             top:${(cy ? plan.pageH - plan.bleed - 1 : plan.bleed).toFixed(1)}px;
+             width:${(20*plan.k).toFixed(1)}px;height:1px"></div>`).join("") : ""}
+    </div>`;
+  }
+  else if(!plan.tiled){
     const ox = plan.m + (plan.availW - drawnW) / 2;
     const oy = plan.m + (plan.availH - drawnH) / 2;
     html += `<div class="sheet" style="width:${plan.pageW}px;height:${plan.pageH}px">
@@ -4117,7 +4489,11 @@ function cropMarks(plan){
 function dateStamp(){
   return new Date().toLocaleDateString(undefined, {day:"numeric", month:"long", year:"numeric"});
 }
-function doPrint(){
+async function doPrint(){
+  /* the code has to exist before the sheet is built, or the banner prints without it */
+  if((printOpts.qr || (printOpts.medium === "flex" && printOpts.flexQR)) && !printOpts.qrUrl){
+    try { printOpts.qrUrl = await shareURL({photos:false, view:ui.view}); } catch(e){}
+  }
   buildPrintSheets();
   closeModal();
   setTimeout(() => {
@@ -4158,7 +4534,8 @@ async function exportPNG(){
   /* the chart is printed at plan.scale CSS px, i.e. plan.scale/MM mm wide;
      rendering that many mm at the chosen dpi gives scale · dpi / 96 */
   const MAXPX = 11000;                      // stay inside the browser's canvas limit
-  const scale = Math.max(0.35, Math.min(plan.scale * printOpts.dpi / 96,
+  const dpi = printOpts.medium === "flex" ? printOpts.flexDpi : printOpts.dpi;
+  const scale = Math.max(0.35, Math.min(plan.scale / plan.k * dpi / 96,
                                         MAXPX / box.w, MAXPX / box.h));
   const cv = viewPaint(model, scale, printPal(),
                        hasTitle ? {main:printOpts.title, sub:printOpts.subtitle} : null);
@@ -5086,6 +5463,7 @@ function shareDialog(){
         <div style="display:flex;gap:7px;margin-top:9px;flex-wrap:wrap;align-items:center">
           <button class="btn sm primary" id="shSend" hidden>Send…</button>
           <button class="btn sm" id="shCopy">Copy link</button>
+          <button class="btn sm" id="shWhats">WhatsApp</button>
           <button class="btn sm" id="shFile">Save as a file</button>
           <button class="btn sm" id="shQR">Save QR image</button>
         </div>
@@ -5146,6 +5524,11 @@ function shareDialog(){
   $("#shCopy").addEventListener("click", async () => {
     try { await navigator.clipboard.writeText(url); toast("Link copied"); }
     catch(e){ $("#shURL").select(); toast("Press Ctrl+C to copy", true); }
+  });
+  $("#shWhats").addEventListener("click", () => {
+    const msg = (S.meta.title || guessTitle()) + " — our family tree. Open it, find yourself, "
+              + "and add what you know:" + String.fromCharCode(10) + url;
+    window.open("https://wa.me/?text=" + encodeURIComponent(msg), "_blank", "noopener");
   });
   $("#shFile").addEventListener("click", async () => {
     const doc = JSON.stringify({app:"heirloom", version:1, data:S}, null, 1);
@@ -5422,7 +5805,7 @@ function save(){
       localStorage.setItem(KEY, JSON.stringify({data:S, ui:{
         view:ui.view, mode:ui.mode, focus:ui.focus, style:ui.style,
         gens:ui.gens, softInlaw:ui.softInlaw, dates:ui.dates,
-        treeStyle:ui.treeStyle, isSample:ui.isSample
+        treeStyle:ui.treeStyle, textSize:ui.textSize, isSample:ui.isSample
       }, origin:ORIGIN}));
     } catch(e){
       toast("Browser storage is full — save a family file", true);
@@ -5641,8 +6024,25 @@ $("#q").addEventListener("input", e => {
   if(ui.query) ui.railTab = "people";
   renderRail();
 });
+$("#railList").addEventListener("click", e => {
+  if(e.target.closest("#askAll")) fillInMode();
+  else if(e.target.closest("#factsBtn")) almanacDialog();
+});
+$("#btnUndo").addEventListener("click", undo);
+const TEXT_SIZES = [1, 1.15, 1.3];
+function applyTextSize(){
+  document.documentElement.style.setProperty("--chrome-zoom", ui.textSize || 1);
+  $("#btnText").setAttribute("aria-pressed", (ui.textSize || 1) > 1);
+}
+$("#btnText").addEventListener("click", () => {
+  const at = TEXT_SIZES.indexOf(ui.textSize || 1);
+  ui.textSize = TEXT_SIZES[(at + 1) % TEXT_SIZES.length];
+  applyTextSize(); save();
+  toast(ui.textSize === 1 ? "Normal text" : Math.round(ui.textSize * 100) + "% text");
+});
 $("#tabPeople").addEventListener("click", () => { ui.railTab = "people"; renderRail(); });
 $("#tabGaps").addEventListener("click", () => { ui.railTab = "gaps"; renderRail(); });
+$("#tabDates").addEventListener("click", () => { ui.railTab = "dates"; renderRail(); });
 $("#railList").addEventListener("click", e => {
   const b = e.target.closest("[data-id]"); if(!b) return;
   select(b.dataset.id); centerOn(b.dataset.id);
@@ -5840,6 +6240,74 @@ function startWizard(){
     if(first) first.addEventListener("keydown", e => {
       if(e.key === "Enter" && e.target.tagName !== "TEXTAREA"){ e.preventDefault(); go(1); }
     });
+  }
+  draw();
+}
+
+/* ── one question at a time ────────────────────────────────
+   The gaps list turned into something anyone can work through
+   without understanding the app at all.
+   ──────────────────────────────────────────────────────── */
+const ASKS = {
+  birth:      {q:p => "When was " + fullName(p) + " born?",       hint:"A year is plenty — 1948, or c. 1950 if you are guessing.", fld:"birth"},
+  place:      {q:p => "Where was " + fullName(p) + " from?",      hint:"A town or village.", fld:"place"},
+  occupation: {q:p => "What did " + fullName(p) + " do?",         hint:"Their work, or “Homemaker”, or “Student”.", fld:"occupation"}
+};
+function fillInMode(){
+  const jobs = [];
+  for(const g of findGaps()){
+    const p = P(g.id); if(!p) continue;
+    if(g.miss.includes("no dates")) jobs.push({id:g.id, kind:"birth"});
+    if(g.miss.includes("no place")) jobs.push({id:g.id, kind:"place"});
+    if(g.miss.includes("no work"))  jobs.push({id:g.id, kind:"occupation"});
+  }
+  if(!jobs.length) return toast("Nothing left to ask about");
+  let i = 0, answered = 0;
+
+  function draw(){
+    if(i >= jobs.length){
+      closeModal(); render();
+      return toast(answered ? answered + (answered === 1 ? " answer added" : " answers added")
+                            : "Nothing changed");
+    }
+    const job = jobs[i], p = P(job.id), ask = ASKS[job.kind];
+    if(!p){ i++; return draw(); }
+    openModal(`
+      <div class="modal" style="width:min(100%,460px)">
+        <div class="modal-head"><div style="flex:1">
+          <div class="mono" style="font-size:9.5px;letter-spacing:.16em;color:var(--ink-3);text-transform:uppercase;margin-bottom:5px">
+            ${i + 1} of ${jobs.length}</div>
+          <h2>${esc(ask.q(p))}</h2><p>${esc(ask.hint)}</p>
+        </div></div>
+        <div class="modal-body">
+          <span class="withmic">
+            <input id="askVal" autocomplete="off" placeholder="Type or leave blank">
+            ${micFor("ask")}
+          </span>
+          <div class="wizbar" style="margin-top:16px">
+            <span class="wizdot on" style="width:${Math.round(220 * (i + 1) / jobs.length)}px"></span>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" id="askStop">Stop</button>
+          <span class="spring"></span>
+          <button class="btn" id="askSkip">Do not know</button>
+          <button class="btn primary" id="askNext">Save</button>
+        </div>
+      </div>`);
+    const box = $("#askVal");
+    setTimeout(() => box.focus(), 40);
+    const mic = $("#modalMount").querySelector("[data-mic]");
+    if(mic) mic.addEventListener("click", () => dictate(box, mic));
+    const commitOne = () => {
+      const v = box.value.trim();
+      if(v){ snapshot(); P(job.id)[ask.fld] = v; answered++; save(); }
+      i++; draw();
+    };
+    $("#askNext").addEventListener("click", commitOne);
+    $("#askSkip").addEventListener("click", () => { i++; draw(); });
+    $("#askStop").addEventListener("click", () => { closeModal(); render(); });
+    box.addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); commitOne(); } });
   }
   draw();
 }
@@ -6050,6 +6518,7 @@ function loadSample(){
   $("#tGens").setAttribute("aria-pressed", !!ui.gens);
   $("#tInlaw").setAttribute("aria-pressed", !!ui.softInlaw);
   $("#tDates").setAttribute("aria-pressed", ui.dates === "full");
+  applyTextSize();
 
   /* Redraw once the register faces land — text measures wider then, so the
      first fit was against the fallback metrics. Re-fit unless the reader has
