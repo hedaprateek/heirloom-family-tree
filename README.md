@@ -18,9 +18,11 @@ also under File ▸ *Start again, guided*. Beginning with yourself and working
 outwards is what every genealogy guide recommends, because it is the part you
 already know.
 
-**Adding relatives from the chart.** Tap anyone and four **＋** handles appear
-around their card — a parent above, a partner to the right, a child below, a
-brother or sister to the left. No need to go looking in the side panel.
+**Adding relatives from the chart.** Tap anyone and a single **＋** appears on
+their card. It opens a menu that says what it will add in words — *Parent*,
+*Partner*, *Child*, *Brother or sister* — each with a line explaining it. The
+menu is drawn at normal size over the chart, so it stays readable however far
+you have zoomed out.
 
 
 Select anyone on the chart and you get **＋ Partner**, **＋ Child**, **＋ Parent**

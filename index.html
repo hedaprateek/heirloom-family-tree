@@ -566,6 +566,28 @@ kbd{
 #chart .handle-plus{stroke:var(--panel);stroke-width:2.2;stroke-linecap:round;pointer-events:none}
 #chart .handle:hover .handle-dot{fill:var(--accent-2)}
 #chart .handle:hover .handle-hit{fill:var(--accent);fill-opacity:.14}
+/* the labelled menu, drawn over the chart at a readable size */
+#relMenu{
+  position:absolute;z-index:20;min-width:206px;padding:5px;
+  background:var(--panel);border:1px solid var(--line-2);border-radius:11px;
+  box-shadow:0 18px 40px -14px var(--shade),0 0 0 1px var(--shade);
+}
+.rm-who{
+  font-family:var(--f-mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-3);padding:6px 9px 7px;border-bottom:1px solid var(--hair);margin-bottom:4px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:230px;
+}
+.rm-item{
+  display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+  padding:8px 9px;border-radius:8px;color:var(--ink);
+}
+.rm-item:hover{background:var(--accent-tint)}
+.rm-item .rm-plus{
+  width:24px;height:24px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;
+  background:var(--accent);color:var(--panel);font-size:13px;line-height:1;
+}
+.rm-item b{display:block;font-size:13px;font-weight:600}
+.rm-item em{display:block;font-style:normal;font-size:10.5px;color:var(--ink-3);margin-top:1px}
 #chart .title-main{fill:var(--ink);font:600 34px var(--f-disp)}
 #chart .title-sub{fill:var(--ink-2);font:400 14px var(--f-ui)}
 #chart .title-rule{stroke:var(--brass);stroke-width:1.5}
@@ -858,6 +880,8 @@ kbd{
       <button id="tInlaw" title="Play down people who married in" aria-pressed="true" aria-label="Play down people who married in"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="5.6" cy="6" r="2.5"/><path d="M1.6 13.4a4 4 0 0 1 8 0" stroke-linecap="round"/><circle cx="11.6" cy="6" r="2.1" stroke-dasharray="1.6 1.7"/><path d="M8.9 13.4a3.4 3.4 0 0 1 5.5-2.7" stroke-linecap="round" stroke-dasharray="1.6 1.7"/></svg></button>
     </div>
 
+    <div id="relMenu" hidden></div>
+
     <div class="credit">Stunity tech — by Prateek</div>
 
     <div class="legend" aria-hidden="true">
@@ -961,7 +985,7 @@ const FAM = {ui:'"Public Sans","Noto Sans Devanagari",sans-serif',
 
 /* ── state ─────────────────────────────────────────────── */
 const KEY = "heirloom.v1";
-const BUILD = "2026-09-07a";   // shown in Help, so a stale cached copy is obvious
+const BUILD = "2026-09-10a";   // shown in Help, so a stale cached copy is obvious
 let S = blankDoc();
 let ui = {
   view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
@@ -1658,12 +1682,13 @@ function drawChart(){
   LAY = makeModel(activePal());
   const empty = !LAY;
   $("#stageEmpty").hidden = !empty;
-  if(empty){ svg.innerHTML = ""; return; }
+  if(empty){ svg.innerHTML = ""; closeRelateMenu(); return; }
   svg.innerHTML = `<g id="vp">${viewSVG(LAY, {selectable:true, ns:"s"})}`
                 + `${selRing(LAY)}${hitsSVG(LAY)}${addHandles(LAY)}</g>`;
   applyTransform();
 }
 function applyTransform(){
+  closeRelateMenu();
   const vp = $("#vp");
   if(vp) vp.setAttribute("transform", `translate(${r1(ui.tx)},${r1(ui.ty)}) scale(${ui.z.toFixed(4)})`);
   $("#zLabel").textContent = Math.round(ui.z * 100) + "%";
@@ -3011,28 +3036,48 @@ function selRing(model){
  * and Family Echo both do it. Above is a parent, beside is a partner, below
  * is a child, and the small one to the left is a brother or sister.
  */
-const HANDLES = [
-  {act:"add-parent",  label:"Add a parent",           dx:.5,  dy:0,  ox:0,   oy:-20},
-  {act:"add-partner", label:"Add a partner",          dx:1,   dy:.5, ox:20,  oy:0},
-  {act:"add-child",   label:"Add a child",            dx:.5,  dy:1,  ox:0,   oy:20},
-  {act:"add-sibling", label:"Add a brother or sister", dx:0,  dy:.5, ox:-20, oy:0}
+const RELATE_MENU = [
+  {act:"add-parent",  label:"Parent",            note:"father or mother"},
+  {act:"add-partner", label:"Partner",           note:"husband or wife"},
+  {act:"add-child",   label:"Child",             note:"son or daughter"},
+  {act:"add-sibling", label:"Brother or sister", note:"same parents"}
 ];
-function addHandles(model){
-  if(!ui.sel) return "";
+/** One handle on the selected card. Four labelled choices would be unreadable
+    at chart zoom, so the words live in a menu drawn at real size instead. */
+function handleAt(model){
+  if(!ui.sel) return null;
   const n = (model.nodes || []).find(n => n.pid === ui.sel);
-  if(!n || !n.w) return "";
-  let s = "";
-  for(const h of HANDLES){
-    const cx = n.x + n.w * h.dx + h.ox, cy = n.y + n.h * h.dy + h.oy;
-    s += `<g class="handle" data-act="${h.act}" role="button" tabindex="0">`
-       + `<title>${esc(h.label)}</title>`
-       + `<circle class="handle-hit" cx="${r1(cx)}" cy="${r1(cy)}" r="15"/>`
-       + `<circle class="handle-dot" cx="${r1(cx)}" cy="${r1(cy)}" r="10"/>`
-       + `<path class="handle-plus" d="M${r1(cx-5)} ${r1(cy)} H${r1(cx+5)} M${r1(cx)} ${r1(cy-5)} V${r1(cy+5)}"/>`
-       + `</g>`;
-  }
-  return s;
+  if(!n || !n.w) return null;
+  return {x:n.x + n.w + 4, y:n.y - 4};
 }
+function addHandles(model){
+  const h = handleAt(model);
+  if(!h) return "";
+  return `<g class="handle" data-act="menu" role="button" tabindex="0">`
+       + `<title>Add a relative</title>`
+       + `<circle class="handle-hit" cx="${r1(h.x)}" cy="${r1(h.y)}" r="19"/>`
+       + `<circle class="handle-dot" cx="${r1(h.x)}" cy="${r1(h.y)}" r="12"/>`
+       + `<path class="handle-plus" d="M${r1(h.x-6)} ${r1(h.y)} H${r1(h.x+6)} M${r1(h.x)} ${r1(h.y-6)} V${r1(h.y+6)}"/>`
+       + `</g>`;
+}
+/** The menu itself, in screen space so it stays legible however far you zoom out. */
+function openRelateMenu(){
+  const p = ui.sel && P(ui.sel);
+  const h = LAY && handleAt(LAY);
+  if(!p || !h) return;
+  const box = $("#relMenu");
+  box.innerHTML = `<div class="rm-who">Add to ${esc(fullName(p))}</div>`
+    + RELATE_MENU.map(m => `<button class="rm-item" data-act="${m.act}">
+        <span class="rm-plus">＋</span>
+        <span><b>${esc(m.label)}</b><em>${esc(m.note)}</em></span></button>`).join("");
+  box.hidden = false;
+  const st = $("#stage").getBoundingClientRect();
+  const sx = ui.tx + h.x * ui.z, sy = ui.ty + h.y * ui.z;
+  const w = box.offsetWidth, ht = box.offsetHeight;
+  box.style.left = Math.round(clamp(sx + 14, 8, st.width  - w - 8)) + "px";
+  box.style.top  = Math.round(clamp(sy - 10, 8, st.height - ht - 8)) + "px";
+}
+function closeRelateMenu(){ const b = $("#relMenu"); if(b) b.hidden = true; }
 
 /* ═══════════════════════════════════════════════════════════
    UI — rail, inspector, forms
@@ -5874,6 +5919,7 @@ let userMoved = false;             // has the reader panned or zoomed yet
       drag = null; return;
     }
     const handle = e.target.closest(".handle");
+    if(!handle) closeRelateMenu();           // any touch off the handle dismisses it
     const node = handle ? null : e.target.closest(".node");
     drag = {x:e.clientX, y:e.clientY, tx:ui.tx, ty:ui.ty, moved:false, node, handle};
   });
@@ -5898,12 +5944,9 @@ let userMoved = false;             // has the reader panned or zoomed yet
     pointers.delete(e.pointerId);
     if(pointers.size < 2) pinch = null;
     if(drag && !drag.moved){
-      if(drag.handle){
-        const p = ui.sel && P(ui.sel);
-        if(p && RELATE[drag.handle.dataset.act]) RELATE[drag.handle.dataset.act](p);
-      }
-      else if(drag.node) select(drag.node.dataset.id);
-      else if(ui.sel){ ui.sel = null; renderRail(); renderInspector(); drawChart(); }
+      if(drag.handle){ openRelateMenu(); }
+      else if(drag.node){ closeRelateMenu(); select(drag.node.dataset.id); }
+      else if(ui.sel){ closeRelateMenu(); ui.sel = null; renderRail(); renderInspector(); drawChart(); }
     }
     drag = null; svg.classList.remove("panning");
   };
@@ -6057,6 +6100,12 @@ let scrimArmed = false;
 document.addEventListener("pointerdown", e => {
   scrimArmed = e.target === $("#drawerScrim");
 }, true);
+$("#relMenu").addEventListener("click", e => {
+  const b = e.target.closest("[data-act]"); if(!b) return;
+  const p = ui.sel && P(ui.sel);
+  closeRelateMenu();
+  if(p && RELATE[b.dataset.act]) RELATE[b.dataset.act](p);
+});
 $("#drawerScrim").addEventListener("click", () => {
   if(!scrimArmed) return;
   scrimArmed = false;
@@ -6370,6 +6419,7 @@ function helpDialog(){
 
 document.addEventListener("keydown", e => {
   if(e.key === "Escape"){
+    if(!$("#relMenu").hidden) return closeRelateMenu();
     if(!$("#scrim").hidden) return closeModal();
     if(ui.sel){ ui.sel = null; renderRail(); renderInspector(); drawChart(); }
     return;
