@@ -73,7 +73,7 @@ too: `?view=tree&shape=rows`.
 | View | What it's for |
 |---|---|
 | **Chart** | The full record — photos, dates, places, occupations, every link. |
-| **Tree** | An actual tree — showing name, dates and place · occupation; trunk at the foot, branches forking up into a crown, foliage at the growing tips, names on the wood. Comes in **two shapes**: *grown*, which splays into a canopy, and *generations*, which keeps the same tree on tidy rows. Click **Tree** again to switch. Limbs thicken in proportion to how many descendants that line carries. The card-detail button adds years, then photos. |
+| **Tree** | An actual tree — showing name, dates and place · occupation; trunk at the foot, branches forking up into a crown, foliage at the growing tips, names on the wood. Comes in **three shapes**: *grown*, which splays into a canopy; *generations*, on tidy rows; and *on its side*, which runs left to right and fits a wide sheet or a banner far better than either upright shape. Click **Tree** again to cycle. Limbs thicken in proportion to how many descendants that line carries. The card-detail button adds years, then photos. |
 | **Fan** | Generations as concentric rings, each slice sized by how much of the family sits behind that person. The best poster for a deep family. |
 | **Timeline** | One bar per life across the years, grouped by generation, with brass ties marking the year two people married. Shows at a glance who overlapped whom. |
 | **Register** | A numbered list to hand round the table, using d'Aboville numbering — `1.2.1` places anyone exactly without needing the chart. |
@@ -89,6 +89,7 @@ It's laid out as a family register rather than an org chart:
 | `†` | died — the card is shaded too |
 | `⚭` | married, with the year beneath |
 | `c.` | approximate — "c. 1910" |
+| broken line | adopted, fostered or a step-child |
 | `⚮` | divorced or separated |
 | `◇` | partners |
 
@@ -186,6 +187,8 @@ or a multi-sheet mural — then adjust.
 Tiled posters get glue overlap, corner trim marks, row/column labels, and an
 **assembly sheet** printed first showing the numbered grid and the finished
 size ("6 sheets — 3 across × 2 down, 126 × 84 cm").
+
+**Words** — a **dedication** under the title in the display face, and a **message** you can place in any corner: who compiled it, what the gathering was, who is still to be found.
 
 **Heading** — the title and subtitle are worked out from your own family: the
 commonest surname, the place most of them come from, the person the chart is

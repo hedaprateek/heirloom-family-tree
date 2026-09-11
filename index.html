@@ -743,6 +743,38 @@ kbd{
   .credit{font-size:9px;bottom:8px}
 }
 </style>
+
+<!-- ═══ Stunity Tech — studio credit (screen + print) ═══════════════════
+     Quiet on screen, set apart from the site's own footer text. In print it
+     becomes a running footer: fixed to the page box so it repeats on every
+     sheet, with @page reserving the space so it never lands on the copy.
+     Colour tokens fall back gracefully on sites that don't define them. -->
+<style>
+.stunity-credit{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  margin:26px auto 34px;padding:20px 16px 0;max-width:1180px;
+  border-top:1px solid var(--line-soft,rgba(128,128,128,.22));
+  font-family:var(--mono,ui-monospace,"Cascadia Mono",Menlo,Consolas,monospace);
+  font-size:11px;letter-spacing:.16em;text-transform:uppercase;line-height:1.5;
+  color:var(--muted,#6b7280);
+}
+.stunity-credit .sc-dot{width:6px;height:6px;border-radius:50%;flex:none;
+  background:var(--shade,currentColor);opacity:.75}
+.stunity-credit b{font-weight:500;color:var(--ink,inherit)}
+.stunity-credit[data-print-only]{display:none}
+@media print{
+  @page{margin-bottom:24mm}
+  .stunity-credit,.stunity-credit[data-print-only]{
+    display:flex!important;position:fixed;left:0;right:0;bottom:-16mm;
+    margin:0;padding:3mm 0 0;max-width:none;
+    border-top:.2mm solid #c9c9c9;background:#fff;color:#5b5b5b;
+    font-size:7.5pt;letter-spacing:.14em;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;
+  }
+  .stunity-credit b{color:#111}
+  .stunity-credit .sc-dot{background:#8a8a8a}
+}
+</style>
 </head>
 <body>
 
@@ -1005,7 +1037,7 @@ const FAM = {ui:'"Public Sans","Noto Sans Devanagari",sans-serif',
 /* ── state ─────────────────────────────────────────────── */
 const KEY = "heirloom.v1";
 const CREDIT = "Stunity tech \u2014 by Prateek";
-const BUILD = "2026-09-11a";   // shown in Help, so a stale cached copy is obvious
+const BUILD = "2026-09-11b";   // shown in Help, so a stale cached copy is obvious
 let S = blankDoc();
 let ui = {
   view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
@@ -1713,7 +1745,7 @@ function chartSVG(model, opts){
 }
 /** Every view gets its heading the same way: draw it, then push the art down. */
 function withTitle(inner, box, title, pal){
-  if(!title || !(title.main || title.sub)) return inner;
+  if(!title || !(title.main || title.sub || title.dedication)) return inner;
   const tx = box.x + 4;
   let head = "";
   if(title.main) head += `<text x="${r1(tx)}" y="${r1(box.y + 34)}" fill="${pal.ink}" `
@@ -1721,11 +1753,20 @@ function withTitle(inner, box, title, pal){
   if(title.sub)  head += `<text x="${r1(tx)}" y="${r1(box.y + 56)}" fill="${pal.ink2}" `
     + `font-family='${FAM.ui}' font-size="14">${esc(title.sub)}</text>`;
   head += `<path d="M${r1(tx)} ${r1(box.y + 68)} H${r1(box.x + box.w - 4)}" stroke="${pal.brass}" stroke-width="1.5" fill="none"/>`;
-  return head + `<g transform="translate(0,72)">` + inner + `</g>`;
+  if(title.dedication)
+    head += `<text x="${r1(tx)}" y="${r1(box.y + 90)}" fill="${pal.ink2}" font-family='${FAM.disp}'
+      font-size="16" font-style="italic">${esc(title.dedication)}</text>`;
+  const drop = title.dedication ? 100 : 72;
+  return head + `<g transform="translate(0,${drop})">` + inner + `</g>`;
+}
+/** The heading block every medium shares. */
+function heading(){
+  return {main:printOpts.title, sub:printOpts.subtitle, dedication:printOpts.dedication};
 }
 function boxWithTitle(model, hasTitle){
   const b = model.box;
-  return hasTitle ? {x:b.x, y:b.y, w:b.w, h:b.h + 72} : b;
+  if(!hasTitle) return b;
+  return {x:b.x, y:b.y, w:b.w, h:b.h + (printOpts.dedication ? 100 : 72)};
 }
 /** Build the SVG innards for whichever view is active. */
 function viewSVG(model, opts){
@@ -2151,7 +2192,9 @@ function rng(seed){
 
 /** Two shapes: the grown crown, and the tidy generational one. */
 function treeView(pal){
-  return ui.treeStyle === "rows" ? treeRowsView(pal) : treeCanopyView(pal);
+  if(ui.treeStyle === "rows") return treeRowsView(pal);
+  if(ui.treeStyle === "wide") return treeWideView(pal);
+  return treeCanopyView(pal);
 }
 
 function treeRowsView(pal){
@@ -2336,6 +2379,170 @@ function treeRowsView(pal){
   y1 += ROW * 0.55 + 30;
   return {kind:"tree", dl, hits, nodes:hits, rows:base.rows, ancestors:base.ancestors,
           box:{x:x0 - PAD, y:y0 - PAD, w:(x1 - x0) + PAD*2, h:(y1 - y0) + PAD*2}};
+}
+
+/* ── the third shape: a tree lying on its side ─────────────
+   Generations march left to right instead of stacking, which
+   suits a wide sheet or a banner far better than either of
+   the upright shapes. A couple sits one above the other.
+   ──────────────────────────────────────────────────────── */
+function treeWideView(pal){
+  const showYear  = ui.style !== "compact";
+  const showPhoto = ui.style === "portrait";
+  const showMeta  = ui.style !== "compact";
+  const PILL_H = showPhoto ? 64 : (showYear ? 54 : 32);
+  const PHOTO  = PILL_H - 20;
+  const SLOT   = PILL_H + 16;        // vertical room each person is given
+  const COL    = 310;                // reach from one generation to the next
+  const MAXW   = COL - 78;
+
+  const lineCache = {};
+  const linesOf = pid => (lineCache[pid] = lineCache[pid] || treeLines(pid, pal, showYear, showMeta));
+
+  /* Pack along one axis with a uniform slot, then read that axis as height. */
+  const base = layout({C:{w:SLOT, h:PILL_H}, W:() => SLOT,
+                       gapSpouse:6, gapSib:10, gapGroup:18});
+  if(!base) return null;
+  const idx = buildIndex();
+  const seat = {}; base.nodes.forEach(n => { seat[n.pid] = n; });
+
+  const mate = {};
+  for(const b of base.bands){
+    const u = U(b.uid);
+    if(!u || !u.a || !u.b || !seat[u.a] || !seat[u.b]) continue;
+    (mate[u.a] = mate[u.a] || []).push({pid:u.b, u});
+    (mate[u.b] = mate[u.b] || []).push({pid:u.a, u});
+  }
+
+  const cellOf = {}, cells = [];
+  const order = base.nodes.slice().sort((a, b) =>
+    ((mate[b.pid] || []).length - (mate[a.pid] || []).length) || (a.x - b.x));
+  for(const n of order){
+    if(cellOf[n.pid]) continue;
+    const members = [n.pid];
+    for(const m of (mate[n.pid] || [])) if(!cellOf[m.pid]) members.push(m.pid);
+    members.sort((p, q) => seat[p].x - seat[q].x);
+    const cell = {members, gen:n.depth, x:n.depth * COL,
+                  top:Math.min.apply(null, members.map(p => seat[p].x))};
+    members.forEach(p => { cellOf[p] = cell; });
+    cells.push(cell);
+  }
+  for(const c of cells){
+    c.w = Math.max(96, Math.min(MAXW,
+      Math.max.apply(null, c.members.map(p => treeLinesW(linesOf(p)))) + 22
+      + (showPhoto ? PHOTO + 8 : 0)));
+    c.h = c.members.length * PILL_H + (c.members.length - 1) * 8;
+    c.mid = c.top + c.h / 2;
+  }
+
+  const grown = {};
+  function descOf(pid){
+    if(grown[pid] != null) return grown[pid];
+    grown[pid] = 0;
+    let n = 0;
+    for(const uid of idx[pid].unions)
+      for(const k of (U(uid).children || [])) if(S.people[k]) n += 1 + descOf(k);
+    return (grown[pid] = n);
+  }
+  const limbW = c => clamp(6 + Math.sqrt(Math.max.apply(null, c.members.map(descOf))) * 4.2, 6, 44);
+
+  const edges = [], hasKids = new Set();
+  for(const uid in S.unions){
+    const u = S.unions[uid];
+    const src = cellOf[u.a] || cellOf[u.b];
+    if(!src) continue;
+    for(const k of (u.children || [])){
+      const dst = cellOf[k];
+      if(dst && dst !== src && dst.gen > src.gen){
+        edges.push({src, dst, dashed:childKind(uid, k) !== "birth"});
+        hasKids.add(src);
+      }
+    }
+  }
+
+  /* a ribbon that leaves rightwards and arrives rightwards */
+  function limbH(x1, y1, x2, y2, w1, w2){
+    const k = Math.max(40, (x2 - x1) * 0.5);
+    const a = [x1 + k, y1], b = [x2 - k, y2];
+    const o = (p, w, sgn) => r1(p[0]) + " " + r1(p[1] + sgn * w / 2);
+    return "M" + o([x1,y1], w1, 1) + " C" + o(a, w1, 1) + " " + o(b, w2, 1) + " " + o([x2,y2], w2, 1)
+         + " L" + o([x2,y2], w2, -1) + " C" + o(b, w2, -1) + " " + o(a, w1, -1) + " " + o([x1,y1], w1, -1) + " Z";
+  }
+
+  const dl = [], hits = [];
+  const roots = cells.filter(c => c.gen === 0);
+  for(const r of roots){                                   // a short trunk at the left
+    const w = limbW(r) * 1.4;
+    dl.push({t:"path", fill:pal.bark, alpha:.95,
+             d:limbH(r.x - COL * 0.42, r.mid, r.x - 6, r.mid, w * 1.5, w)});
+    dl.push({t:"path", stroke:pal.line2, sw:1.2, cap:"round", alpha:.5,
+             d:"M" + r1(r.x - COL * 0.44) + " " + r1(r.mid - w * 1.6) + " V" + r1(r.mid + w * 1.6)});
+  }
+  for(const e of edges){
+    const w = limbW(e.dst);
+    dl.push({t:"path", fill:pal.bark, alpha:e.dashed ? .42 : .92,
+             dash:e.dashed ? "8 6" : null, stroke:e.dashed ? pal.bark : null, sw:e.dashed ? 1 : 0,
+             d:limbH(e.src.x + e.src.w, e.src.mid, e.dst.x - 6, e.dst.mid, w * 1.15, w * 0.85)});
+  }
+  for(const c of cells){                                   // leaves at the outer tips
+    if(hasKids.has(c)) continue;
+    const r = rng(hash32(c.members[0]));
+    for(let i = 0; i < 5; i++){
+      const a = -60 + r() * 120;
+      const px = c.x + c.w + 14 + r() * 22, py = c.mid + (r() - .5) * c.h;
+      dl.push({t:"path", d:almond(px, py, 13 + r() * 8, 7), fill:pal.accent,
+               alpha:.28 + r() * .3, rot:a + 90, rx:px, ry:py});
+    }
+  }
+
+  for(const c of cells){
+    c.members.forEach((pid, i) => {
+      const p = P(pid), top = c.top + i * (PILL_H + 8);
+      dl.push({t:"rect", x:c.x, y:top + 2, w:c.w, h:PILL_H, r:PILL_H / 2.8, fill:pal.line2, alpha:.26});
+      dl.push({t:"rect", x:c.x, y:top, w:c.w, h:PILL_H, r:PILL_H / 2.8,
+               fill:pal.card, stroke:pal.line2, sw:1});
+      let tx = c.x + 11, tw = c.w - 22;
+      if(showPhoto){
+        const rr = PHOTO / 2, cx = c.x + 9 + rr, cy = top + PILL_H / 2;
+        if(p.photo) dl.push({t:"image", pid, href:p.photo, x:c.x + 9, y:cy - rr,
+                             w:PHOTO, h:PHOTO, clip:{cx, cy, r:rr}});
+        else {
+          dl.push({t:"circle", cx, cy, r:rr, fill:mix(pal.card, pal.accent, .18)});
+          dl.push({t:"text", x:cx, y:cy + 5, s:initials(p), size:Math.round(rr * .85),
+                   weight:600, fill:pal.ink2, anchor:"middle"});
+        }
+        dl.push({t:"circle", cx, cy, r:rr, stroke:pal.line2, sw:1});
+        tx = c.x + 9 + PHOTO + 9; tw = c.w - (tx - c.x) - 10;
+      }
+      const lines = linesOf(pid);
+      let ly = top + PILL_H / 2 - (lines.length - 1) * TREE_LH / 2 + 4;
+      for(const L of lines){
+        dl.push({t:"text", x:tx, y:ly, s:fitTo(L.s, tw, L.size, L.fam || "ui", L.weight),
+                 size:L.size, weight:L.weight, fam:L.fam, fill:L.fill});
+        ly += TREE_LH;
+      }
+      if(i){                                               // the marriage, between them
+        const rel = (mate[c.members[i-1]] || []).find(m => m.pid === pid);
+        const u = rel && rel.u, gy = top - 4;
+        dl.push({t:"path", d:"M" + r1(c.x + 16) + " " + r1(gy) + " H" + r1(c.x + c.w - 16),
+                 stroke:pal.brass, sw:1.4, alpha:.9, dash:u && u.divorced ? "5 3" : null});
+        dl.push({t:"text", x:c.x + c.w / 2, y:gy + 4, anchor:"middle", size:SSZ, fill:pal.brass,
+                 s:u && u.divorced ? "\u26ae" : (u && u.status === "partners" ? "\u25c7" : "\u26ad")});
+      }
+      const sire = (seat[pid] || {}).sire;
+      if(sire && !i) dl.push({t:"text", x:c.x + 11, y:top + PILL_H + 11,
+                              s:fitTo(sire, c.w, 9.5, "ui"), size:9.5, fill:pal.ink3});
+      hits.push({pid, x:c.x, y:top, w:c.w, h:PILL_H, depth:c.gen});
+    });
+  }
+
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for(const c of cells){
+    x0 = Math.min(x0, c.x - COL * 0.46); x1 = Math.max(x1, c.x + c.w + 56);
+    y0 = Math.min(y0, c.top - 14);       y1 = Math.max(y1, c.top + c.h + 20);
+  }
+  return {kind:"tree", dl, hits, nodes:hits, rows:base.rows, ancestors:base.ancestors,
+          box:{x:x0 - PAD, y:y0 - PAD, w:(x1 - x0) + PAD * 2, h:(y1 - y0) + PAD * 2}};
 }
 
 function treeCanopyView(pal){
@@ -4015,6 +4222,7 @@ let printOpts = {
   crop:true, overlap:5, frame:false, guide:true,
   tint:"white", ink:"colour", dpi:300,
   legend:true, stamp:true, count:false, qr:false, qrUrl:"",
+  dedication:"", message:"", msgPos:"bottom-left",
   title:"", subtitle:"", note:""
 };
 const PRESETS = {
@@ -4192,6 +4400,22 @@ function printDialog(){
               <label class="f"><span>Footer line</span><input id="pNote" value="${esc(printOpts.note)}"></label>
             </div>
           </fieldset>
+
+          <fieldset><legend>Words on the sheet</legend>
+            <label class="f"><span>Dedication</span>
+              <input id="pDedic" value="${esc(printOpts.dedication)}"
+                placeholder="In loving memory of Hari Prasad Deshmukh">
+              <span class="hint">sits under the title, in the display face</span></label>
+            <label class="f" style="margin-top:10px"><span>Message</span>
+              <textarea id="pMsg" style="min-height:78px"
+                placeholder="A few lines for the occasion — who compiled it, what the gathering was, anyone still to be found.">${esc(printOpts.message)}</textarea></label>
+            <label class="f" style="margin-top:9px"><span>Put the message</span><select id="pMsgPos">
+              <option value="bottom-left"${printOpts.msgPos==="bottom-left"?" selected":""}>Bottom left</option>
+              <option value="bottom-right"${printOpts.msgPos==="bottom-right"?" selected":""}>Bottom right</option>
+              <option value="top-right"${printOpts.msgPos==="top-right"?" selected":""}>Top right</option>
+              <option value="under-title"${printOpts.msgPos==="under-title"?" selected":""}>Under the title</option>
+            </select></label>
+          </fieldset>
         </div>
 
         <div class="prev">
@@ -4255,6 +4479,9 @@ function printDialog(){
     printOpts.title   = $("#pTitle").value;
     printOpts.subtitle= $("#pSub").value;
     printOpts.note    = $("#pNote").value;
+    printOpts.dedication = $("#pDedic").value;
+    printOpts.message    = $("#pMsg").value;
+    printOpts.msgPos     = $("#pMsgPos").value;
     const flex = printOpts.medium === "flex";
     $("#flexBlock").style.display  = flex ? "" : "none";
     $("#paperBlock").style.display = flex ? "none" : "";
@@ -4374,7 +4601,7 @@ function planSheets(){
   const pageW = (land ? Math.max(pw0, ph0) : Math.min(pw0, ph0)) * MM;
   const pageH = (land ? Math.min(pw0, ph0) : Math.max(pw0, ph0)) * MM;
   const m     = printOpts.margin * MM;
-  const hasTitle = !!(printOpts.title || printOpts.subtitle);
+  const hasTitle = !!(printOpts.title || printOpts.subtitle || printOpts.dedication);
   const anyFoot = printOpts.note || printOpts.crop || printOpts.legend
                || printOpts.stamp || printOpts.count;
   const footH = anyFoot ? (printOpts.legend ? 11 : 7) * MM : 0;
@@ -4409,7 +4636,7 @@ function planFlex(){
   const trimW = printOpts.flexW * FT_MM * MM * k;
   const trimH = printOpts.flexH * FT_MM * MM * k;
   const pageW = trimW + bleed * 2, pageH = trimH + bleed * 2;
-  const hasTitle = !!(printOpts.title || printOpts.subtitle);
+  const hasTitle = !!(printOpts.title || printOpts.subtitle || printOpts.dedication);
   const footH = 0;
   const model = makeModel(printPal()) || LAY;
   const box = boxWithTitle(model, hasTitle);
@@ -4428,7 +4655,7 @@ function paintPreview(){
   const gw = plan.pageW * plan.cols, gh = plan.pageH * plan.rows;
   const k = Math.min(maxW / gw, maxH / gh);
   const svgInner = viewSVG(plan.model, {selectable:false, ns:"pv", credit:true, pal:printPal(),
-    title: plan.hasTitle ? {main:printOpts.title, sub:printOpts.subtitle} : null});
+    title: plan.hasTitle ? heading() : null});
   const b = plan.box;
 
   mount.innerHTML = `<div class="sheetprev${printOpts.ink === "mono" ? " ink-mono" : ""}"
@@ -4518,7 +4745,7 @@ function buildPrintSheets(){
   const b = plan.box;
   const pal = printPal();
   const svgInner = viewSVG(plan.model, {selectable:false, ns:"pr", pal,
-    title: plan.hasTitle ? {main:printOpts.title, sub:printOpts.subtitle} : null});
+    title: plan.hasTitle ? heading() : null});
   const svgFor = (w, h) =>
     `<svg width="${w.toFixed(1)}" height="${h.toFixed(1)}" viewBox="${r1(b.x)} ${r1(b.y)} ${r1(b.w)} ${r1(b.h)}"
       xmlns="http://www.w3.org/2000/svg">${svgInner}</svg>`;
@@ -4529,6 +4756,19 @@ function buildPrintSheets(){
   const drawnW = b.w * plan.scale, drawnH = b.h * plan.scale;
   const nSheets = plan.cols * plan.rows;
 
+  /* a few lines for the occasion, tucked into whichever corner suits the chart */
+  const msgBlock = (scale) => {
+    if(!printOpts.message.trim()) return "";
+    const k = scale || 1;
+    const pos = printOpts.msgPos;
+    const side = pos === "bottom-right" || pos === "top-right" ? "right" : "left";
+    const vert = pos === "top-right" ? "top" : "bottom";
+    const inset = plan.m + (plan.footH || 0) * (vert === "bottom" ? 1 : 0);
+    return `<div style="position:absolute;${side}:${plan.m.toFixed(1)}px;${vert}:${inset.toFixed(1)}px;
+        max-width:${Math.min(plan.availW * 0.42, 340 * k).toFixed(0)}px;
+        font:400 ${(11 * k).toFixed(1)}px/1.65 ${FAM.ui};color:${pal.ink2};
+        text-align:${side};white-space:pre-wrap">${esc(printOpts.message.trim())}</div>`;
+  };
   const frame = printOpts.frame ? `<div style="position:absolute;left:${(plan.m*0.55).toFixed(1)}px;`
     + `top:${(plan.m*0.55).toFixed(1)}px;right:${(plan.m*0.55).toFixed(1)}px;`
     + `bottom:${(plan.m*0.55).toFixed(1)}px;border:1px solid ${pal.brass};pointer-events:none"></div>` : "";
@@ -4643,6 +4883,7 @@ function buildPrintSheets(){
       <div style="position:absolute;left:${ox.toFixed(1)}px;top:${oy.toFixed(1)}px">${svgFor(drawnW, drawnH)}</div>
       ${printOpts.frame ? `<div style="position:absolute;left:${plan.m}px;top:${plan.m}px;
           right:${plan.m}px;bottom:${plan.m}px;border:${(2*plan.k).toFixed(2)}px solid ${pal.brass}"></div>` : ""}
+      ${msgBlock(plan.trimW / 900)}
       ${q ? `<div style="position:absolute;right:${(plan.m).toFixed(1)}px;bottom:${(plan.m).toFixed(1)}px;text-align:center">
           <svg width="${qpx.toFixed(0)}" height="${qpx.toFixed(0)}" viewBox="0 0 ${q.size} ${q.size}">
             <rect width="${q.size}" height="${q.size}" fill="#fff"/><path d="${q.d}" fill="#141C22"/></svg>
@@ -4665,7 +4906,7 @@ function buildPrintSheets(){
     const oy = plan.m + (plan.availH - drawnH) / 2;
     html += `<div class="sheet" style="width:${plan.pageW}px;height:${plan.pageH}px">
       <div style="position:absolute;left:${ox.toFixed(1)}px;top:${oy.toFixed(1)}px">${svgFor(drawnW, drawnH)}</div>
-      ${frame}${printOpts.qr ? qrBlock(60) : ""}
+      ${frame}${printOpts.qr ? qrBlock(60) : ""}${msgBlock(1)}
       ${foot(printOpts.note, "")}
     </div>`;
   } else {
@@ -4677,7 +4918,7 @@ function buildPrintSheets(){
           <div class="clipbox" style="left:${plan.m}px;top:${plan.m}px;width:${plan.availW.toFixed(1)}px;height:${plan.availH.toFixed(1)}px">
             <div style="position:absolute;left:${(-offX).toFixed(1)}px;top:${(-offY).toFixed(1)}px">${svgFor(drawnW, drawnH)}</div>
           </div>
-          ${printOpts.crop ? cropMarks(plan) : ""}${frame}
+          ${printOpts.crop ? cropMarks(plan) : ""}${frame}${r === plan.rows - 1 && c === 0 ? msgBlock(1) : ""}
           ${printOpts.qr && last ? qrBlock(56) : ""}
           ${foot((printOpts.note ? printOpts.note + "  ·  " : "") + printOpts.title,
                  `row ${r+1} · col ${c+1}   (sheet ${r*plan.cols+c+1} of ${nSheets})`)}
@@ -4750,7 +4991,7 @@ async function exportPNG(){
   const scale = Math.max(0.35, Math.min(plan.scale / plan.k * dpi / 96,
                                         MAXPX / box.w, MAXPX / box.h));
   const cv = viewPaint(model, scale, printPal(),
-                       hasTitle ? {main:printOpts.title, sub:printOpts.subtitle} : null);
+                       hasTitle ? heading() : null);
   cv.toBlob(async blob => {
     if(!blob) return toast("Could not build the image", true);
     const ok = await offer(slug() + ".png", blob, "image/png");
@@ -4766,10 +5007,10 @@ async function exportCSV(){
 async function exportSVG(){
   const model = makeModel(printPal());
   if(!model) return;
-  const hasTitle = !!(printOpts.title || printOpts.subtitle);
+  const hasTitle = !!(printOpts.title || printOpts.subtitle || printOpts.dedication);
   const box = boxWithTitle(model, hasTitle);
   const inner = viewSVG(model, {selectable:false, ns:"ex", credit:true, pal:printPal(),
-                                title: hasTitle ? {main:printOpts.title, sub:printOpts.subtitle} : null});
+                                title: hasTitle ? heading() : null});
   const style = `
     @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Mono&family=Public+Sans:wght@400;500;600&family=Noto+Sans+Devanagari:wght@400;500;600&family=Noto+Serif+Devanagari:wght@400;600&display=swap");
     svg{--f-ui:"Public Sans","Noto Sans Devanagari",sans-serif;--f-mono:"IBM Plex Mono","Noto Sans Devanagari",monospace;--f-disp:"Fraunces","Noto Serif Devanagari",Georgia,serif;
@@ -6179,12 +6420,13 @@ function setMode(m){
   }
   save();
 }
-const TREE_SHAPE = {canopy:"Tree — grown", rows:"Tree — generations"};
+const TREE_SHAPE = {canopy:"Tree — grown", rows:"Tree — generations", wide:"Tree — on its side"};
+const TREE_ORDER = ["canopy", "rows", "wide"];
 for(const k in VIEWS)
   $("#" + VIEWS[k]).addEventListener("click", () => {
     /* clicking Tree while it is already showing switches between its two shapes */
     if(k === "tree" && ui.view === "tree"){
-      ui.treeStyle = ui.treeStyle === "canopy" ? "rows" : "canopy";
+      ui.treeStyle = TREE_ORDER[(TREE_ORDER.indexOf(ui.treeStyle) + 1) % TREE_ORDER.length];
       setView("tree"); render(); fitView();
       return toast(TREE_SHAPE[ui.treeStyle]);
     }
@@ -6721,7 +6963,7 @@ function loadSample(){
     const want = q.get("view");
     if(want && VIEWS[want]) ui.view = want;
     const shape = q.get("shape");
-    if(shape === "rows" || shape === "canopy") ui.treeStyle = shape;
+    if(TREE_ORDER.indexOf(shape) >= 0) ui.treeStyle = shape;
   } catch(e){}
 
   if(!had) loadSample();
@@ -6767,5 +7009,7 @@ function loadSample(){
   }
 })();
 </script>
+
+<div class="stunity-credit" data-print-only><span class="sc-dot"></span><span>Stunity Tech — by <b>Prateek</b></span></div>
 </body>
 </html>
