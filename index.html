@@ -764,7 +764,7 @@ kbd{
 .stunity-credit[data-print-only]{display:none}
 @media print{
   @page{margin-bottom:24mm}
-  .stunity-credit,.stunity-credit[data-print-only]{
+  html body #stunityCredit.stunity-credit,html body #stunityCredit.stunity-credit[data-print-only]{
     display:flex!important;position:fixed;left:0;right:0;bottom:-16mm;
     margin:0;padding:3mm 0 0;max-width:none;
     border-top:.2mm solid #c9c9c9;background:#fff;color:#5b5b5b;
@@ -7010,6 +7010,6 @@ function loadSample(){
 })();
 </script>
 
-<div class="stunity-credit" data-print-only><span class="sc-dot"></span><span>Stunity Tech — by <b>Prateek</b></span></div>
+<div class="stunity-credit" id="stunityCredit" data-print-only><span class="sc-dot"></span><span>Stunity Tech — by <b>Prateek</b></span></div>
 </body>
 </html>
