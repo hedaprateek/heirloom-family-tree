@@ -233,6 +233,11 @@ button{cursor:pointer;background:none;border:0;padding:0}
 .prow .dt{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-3);white-space:nowrap}
 .prow.inlaw .nm{font-size:12px;font-weight:400;color:var(--ink-2)}
 .prow.inlaw .av{opacity:.62}
+.kind-chip{
+  display:inline-block;margin-left:6px;padding:0 6px;border-radius:999px;
+  background:var(--brass-tint);color:var(--brass);
+  font-family:var(--f-mono);font-size:9px;letter-spacing:.06em;vertical-align:1px;
+}
 .tag-rel{
   display:inline-block;margin-top:4px;padding:1px 8px;border-radius:999px;
   background:var(--accent-tint);color:var(--accent-2);
@@ -551,6 +556,7 @@ kbd{
   :root:not([data-theme="light"]) #chart .mono-tx{fill:hsl(var(--h) 38% 80%)}
 }
 #chart .link{fill:none;stroke:var(--line-2);stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+#chart .link.dashed{stroke-dasharray:5 4}
 #chart .link.cross{stroke:var(--accent-ring);stroke-dasharray:2 4;stroke-width:1.2;opacity:.85}
 #chart .ulink{stroke:var(--brass);stroke-width:1.6;fill:none;opacity:.9}
 #chart .ulink.div{stroke-dasharray:5 3}
@@ -645,6 +651,7 @@ kbd{
 #printRoot .mono-bg{fill:hsl(var(--h) 26% 85%)}
 #printRoot .mono-tx{fill:hsl(var(--h) 32% 30%);font:600 13px var(--f-ui)}
 #printRoot .link{fill:none;stroke:var(--line-2);stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+#printRoot .link.dashed{stroke-dasharray:5 4}
 #printRoot .link.cross{stroke:var(--accent-ring);stroke-dasharray:2 4;stroke-width:1.2}
 #printRoot .ulink{stroke:var(--brass);stroke-width:1.6;fill:none}
 #printRoot .ulink.div{stroke-dasharray:5 3}
@@ -674,6 +681,7 @@ kbd{
 .sheetprev .mono-bg{fill:hsl(var(--h) 26% 85%)}
 .sheetprev .mono-tx{fill:hsl(var(--h) 32% 30%);font:600 13px var(--f-ui)}
 .sheetprev .link{fill:none;stroke:var(--line-2);stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+.sheetprev .link.dashed{stroke-dasharray:5 4}
 .sheetprev .link.cross{stroke:var(--accent-ring);stroke-dasharray:2 4}
 .sheetprev .ulink{stroke:var(--brass);stroke-width:1.6;fill:none}
 .sheetprev .ulink.div{stroke-dasharray:5 3}
@@ -731,7 +739,8 @@ kbd{
   .only-narrow{display:inline-flex}
   .only-narrow-block{display:block}
   .hide-narrow{display:none !important}
-  .legend,.credit{display:none}
+  .legend{display:none}
+  .credit{font-size:9px;bottom:8px}
 }
 </style>
 </head>
@@ -995,7 +1004,8 @@ const FAM = {ui:'"Public Sans","Noto Sans Devanagari",sans-serif',
 
 /* ── state ─────────────────────────────────────────────── */
 const KEY = "heirloom.v1";
-const BUILD = "2026-09-10b";   // shown in Help, so a stale cached copy is obvious
+const CREDIT = "Stunity tech \u2014 by Prateek";
+const BUILD = "2026-09-11a";   // shown in Help, so a stale cached copy is obvious
 let S = blankDoc();
 let ui = {
   view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
@@ -1160,7 +1170,14 @@ function buildIndex(){
     const u = S.unions[uid];
     if(u.a && idx[u.a]) idx[u.a].unions.push(uid);
     if(u.b && idx[u.b]) idx[u.b].unions.push(uid);
-    (u.children||[]).forEach(k => { if(idx[k]){ idx[k].childOf = uid; } });
+    /* a child of two families sits under the one they were born to, and the
+       other is drawn across with a broken line */
+    (u.children||[]).forEach(k => {
+      if(!idx[k]) return;
+      const mine = childKind(uid, k);
+      if(idx[k].childOf == null || (mine === "birth" && childKind(idx[k].childOf, k) !== "birth"))
+        idx[k].childOf = uid;
+    });
   }
   for(const id in idx){
     const u = idx[id].childOf ? U(idx[id].childOf) : null;
@@ -1170,6 +1187,34 @@ function buildIndex(){
   return idx;
 }
 function partnerOf(u, pid){ return u.a === pid ? u.b : u.a; }
+
+/* ── how a child joined a family ───────────────────────────
+   Absent means born to them, so every tree ever saved still
+   reads correctly. Anything else is drawn with a broken line,
+   which is how a register shows it.
+   ──────────────────────────────────────────────────────── */
+const CHILD_KINDS = [
+  {k:"birth",   label:"Their own child", short:""},
+  {k:"adopted", label:"Adopted",         short:"adopted"},
+  {k:"step",    label:"Step-child",      short:"step-child"},
+  {k:"foster",  label:"Fostered",        short:"fostered"}
+];
+const KIND_LABEL = k => (CHILD_KINDS.find(x => x.k === k) || CHILD_KINDS[0]).short;
+function childKind(uid, pid){
+  const u = U(uid);
+  return (u && u.kinds && u.kinds[pid]) || "birth";
+}
+function setChildKind(uid, pid, k){
+  const u = U(uid); if(!u) return;
+  u.kinds = u.kinds || {};
+  if(k === "birth") delete u.kinds[pid]; else u.kinds[pid] = k;
+}
+/** Every family this person is a child of — more than one when adopted. */
+function parentUnionsOf(pid){
+  const out = [];
+  for(const uid in S.unions) if((S.unions[uid].children || []).includes(pid)) out.push(uid);
+  return out;
+}
 
 /* ── mutation + undo ───────────────────────────────────── */
 function snapshot(){
@@ -1436,7 +1481,10 @@ function apply(blk, ox, ctx){
     ctx.links.push({d:`M${r1(stemX)} ${r1(stemY)} V${r1(busY)}`});
     if(anchors.length > 1 || Math.abs(anchors[0] - stemX) > 0.5)
       ctx.links.push({d:`M${r1(lo)} ${r1(busY)} H${r1(hi)}`});
-    anchors.forEach(ax => ctx.links.push({d:`M${r1(ax)} ${r1(busY)} V${r1(y + row)}`}));
+    g.blocks.forEach((b, i) => ctx.links.push({
+      d:`M${r1(anchors[i])} ${r1(busY)} V${r1(y + row)}`,
+      dashed: childKind(m.uid, b.pid) !== "birth"
+    }));
 
     g.blocks.forEach(b => apply(b, ox + g.left + b.offset, ctx));
   }
@@ -1656,7 +1704,7 @@ function chartSVG(model, opts){
       out += `<text class="genlab" x="${r1(model.minX - 36)}" y="${r1(r.y + C.h/2 + 3)}" text-anchor="end">${esc(r.label)}</text>`;
     }
   }
-  model.links.forEach(l => { out += `<path class="link" d="${l.d}"/>`; });
+  model.links.forEach(l => { out += `<path class="link${l.dashed ? " dashed" : ""}" d="${l.d}"/>`; });
   model.cross.forEach(l => { out += `<path class="link cross" d="${l.d}"/>`; });
   model.bands.forEach(b => { out += bandSVG(b); });
   model.nodes.forEach(n => { out += cardSVG(n, model, opts); });
@@ -1684,7 +1732,10 @@ function viewSVG(model, opts){
   opts = opts || {};
   const pal = opts.pal || activePal();
   const inner = model.kind === "chart" ? chartSVG(model, opts) : dlToSVG(model.dl);
-  return withTitle(inner, model.box, opts.title, pal);
+  const out = withTitle(inner, model.box, opts.title, pal);
+  if(!opts.credit) return out;
+  const b = model.box, ty = b.y + b.h + (opts.title && (opts.title.main || opts.title.sub) ? 72 : 0) - 6;
+  return out + `<text x="${r1(b.x + b.w - 4)}" y="${r1(ty)}" text-anchor="end" fill="${pal.ink3}" font-family='${FAM.mono}' font-size="9" opacity=".8">${esc(CREDIT)}</text>`;
 }
 
 function drawChart(){
@@ -1772,7 +1823,11 @@ function renderCanvas(model, scale, palIn, title){
   }
 
   x.strokeStyle = pal.line2; x.lineWidth = 1.4; x.lineJoin = "round"; x.lineCap = "round";
-  model.links.forEach(l => x.stroke(new Path2D(l.d)));
+  model.links.forEach(l => {
+    x.setLineDash(l.dashed ? [5, 4] : []);   // a child who joined the family another way
+    x.stroke(new Path2D(l.d));
+  });
+  x.setLineDash([]);
   x.strokeStyle = pal.ring; x.lineWidth = 1.2; x.setLineDash([2, 4]);
   model.cross.forEach(l => x.stroke(new Path2D(l.d)));
   x.setLineDash([]);
@@ -1856,7 +1911,16 @@ function renderCanvas(model, scale, palIn, title){
     }
     x.restore();
   }
+  paintCredit(x, pal, b, titleH);
   return cv;
+}
+/** The small mark that goes on anything leaving the app. */
+function paintCredit(x, pal, box, titleH){
+  x.save();
+  x.globalAlpha = .8; x.fillStyle = pal.ink3;
+  x.font = "400 9px " + FAM.mono; x.textAlign = "right";
+  x.fillText(CREDIT, box.x + box.w - 4, box.y + box.h + (titleH || 0) - 6);
+  x.restore();
 }
 function roundRect(x, px, py, w, h, r){
   x.beginPath();
@@ -2024,6 +2088,7 @@ function renderCanvasDL(model, scale, palIn, title){
     x.translate(0, 72);
   }
   dlPaint(x, model.dl);
+  paintCredit(x, pal, model.box, titleH);
   return cv;
 }
 
@@ -3396,7 +3461,10 @@ function renderInspector(){
   const kids = info.kids;
   if(kids.length){
     kids.sort(byBirth);
-    for(const k of kids) html += relRow(k, "child");
+    for(const k of kids){
+      const via = info.unions.find(uid => (U(uid).children || []).includes(k));
+      html += relRow(k, "child", "", {uid:via, many:info.unions.length > 1});
+    }
   } else {
     html += `<div class="rel-none">No children recorded.</div>`;
   }
@@ -3803,6 +3871,93 @@ function unionDialog(uid){
     delete S.unions[uid];
     if(kids.length && stays) addUnion(stays, null, {children:kids});
     closeModal(); commit("Union removed");
+  });
+}
+
+/** How a child came into a family — drawn with a broken line unless by birth. */
+function childKindDialog(uid, pid){
+  const p = P(pid), u = U(uid); if(!p || !u) return;
+  const who = [u.a, u.b].filter(x => x && P(x)).map(x => fullName(P(x))).join(" & ") || "this family";
+  const now = childKind(uid, pid);
+  openModal(`
+    <div class="modal" style="width:min(100%,430px)">
+      <div class="modal-head"><div><h2>${esc(fullName(p))}</h2>
+        <p>How did they join ${esc(who)}?</p></div></div>
+      <div class="modal-body"><div class="rel">
+        ${CHILD_KINDS.map(k => `<button class="rel-item" style="width:100%;text-align:left" data-kind="${k.k}">
+          <span class="txt"><span class="nm">${esc(k.label)}</span>
+          <span class="meta">${k.k === "birth" ? "drawn with a solid line"
+            : "drawn with a broken line, the way a register shows it"}</span></span>
+          ${now === k.k ? `<span class="kind-chip">current</span>` : ""}</button>`).join("")}
+      </div></div>
+      <div class="modal-foot"><span class="spring"></span><button class="btn" data-close>Cancel</button></div>
+    </div>`);
+  $("#modalMount").addEventListener("click", e => {
+    const b = e.target.closest("[data-kind]"); if(!b) return;
+    snapshot(); setChildKind(uid, pid, b.dataset.kind);
+    closeModal(); commit(b.dataset.kind === "birth" ? "Set as their own child"
+                                                    : KIND_LABEL(b.dataset.kind));
+  });
+}
+/** Put a child under the right marriage when someone married more than once. */
+function moveChildDialog(fromUid, pid){
+  const p = P(pid); if(!p) return;
+  const parent = [U(fromUid).a, U(fromUid).b].find(x => x && P(x));
+  const unions = parent ? buildIndex()[parent].unions : [];
+  if(unions.length < 2) return toast("There is only one marriage to put them in");
+  openModal(`
+    <div class="modal">
+      <div class="modal-head"><div><h2>Which marriage?</h2>
+        <p>${esc(fullName(p))} will be shown under the one you choose.</p></div></div>
+      <div class="modal-body"><div class="rel">
+        ${unions.map(uid => {
+          const u = U(uid), sp = partnerOf(u, parent);
+          return `<button class="rel-item" style="width:100%;text-align:left" data-to="${uid}">
+            <span class="txt"><span class="nm">with ${sp && P(sp) ? esc(fullName(P(sp))) : "an unknown partner"}</span>
+            <span class="meta">${esc([yearOf(u.date), (u.children||[]).length + " children"].filter(Boolean).join(" · "))}</span></span>
+            ${uid === fromUid ? `<span class="kind-chip">current</span>` : ""}</button>`;
+        }).join("")}
+      </div></div>
+      <div class="modal-foot"><span class="spring"></span><button class="btn" data-close>Cancel</button></div>
+    </div>`);
+  $("#modalMount").addEventListener("click", e => {
+    const b = e.target.closest("[data-to]"); if(!b) return;
+    const to = b.dataset.to;
+    closeModal();
+    if(to === fromUid) return;
+    snapshot();
+    const kind = childKind(fromUid, pid);
+    U(fromUid).children = (U(fromUid).children || []).filter(k => k !== pid);
+    setChildKind(fromUid, pid, "birth");
+    if(!U(to).children.includes(pid)) U(to).children.push(pid);
+    setChildKind(to, pid, kind);
+    commit("Moved");
+  });
+}
+/** A second set of parents — adoptive, foster or step. */
+function secondFamilyDialog(p){
+  openModal(`
+    <div class="modal" style="width:min(100%,440px)">
+      <div class="modal-head"><div><h2>Another family for ${esc(fullName(p))}</h2>
+        <p>They keep the parents they already have. The new family is drawn with a
+           broken line, so both are on the chart and it is clear which is which.</p></div></div>
+      <div class="modal-body"><div class="rel">
+        ${CHILD_KINDS.filter(k => k.k !== "birth").map(k =>
+          `<button class="rel-item" style="width:100%;text-align:left" data-new="${k.k}">
+            <span class="txt"><span class="nm">${esc(k.label)}</span></span></button>`).join("")}
+      </div></div>
+      <div class="modal-foot"><span class="spring"></span><button class="btn" data-close>Cancel</button></div>
+    </div>`);
+  $("#modalMount").addEventListener("click", e => {
+    const b = e.target.closest("[data-new]"); if(!b) return;
+    closeModal();
+    choosePerson({title:"Who took them in?", subtitle:"Pick someone already on the chart, or type a new name.",
+      exclude:[p.id], seed:""}, id => {
+      snapshot();
+      const uid = addUnion(id, null, {children:[p.id]});
+      setChildKind(uid, p.id, b.dataset.new);
+      commit(KIND_LABEL(b.dataset.new) + " — added"); select(id);
+    });
   });
 }
 
@@ -4272,7 +4427,7 @@ function paintPreview(){
   const maxW = 268, maxH = 200;
   const gw = plan.pageW * plan.cols, gh = plan.pageH * plan.rows;
   const k = Math.min(maxW / gw, maxH / gh);
-  const svgInner = viewSVG(plan.model, {selectable:false, ns:"pv", pal:printPal(),
+  const svgInner = viewSVG(plan.model, {selectable:false, ns:"pv", credit:true, pal:printPal(),
     title: plan.hasTitle ? {main:printOpts.title, sub:printOpts.subtitle} : null});
   const b = plan.box;
 
@@ -4387,7 +4542,7 @@ function buildPrintSheets(){
     return `<div style="position:absolute;left:${plan.m}px;right:${plan.m}px;bottom:${(plan.m*0.5).toFixed(1)}px">
       ${printOpts.legend ? `<div class="pfoot" style="font-size:8px;justify-content:center;color:${pal.ink3};margin-bottom:3px">
         <span style="letter-spacing:.06em">${LEGEND_TEXT}</span></div>` : ""}
-      <div class="pfoot" style="font-size:8.5px;color:${pal.ink3}"><span>${esc(left)}</span><span>${esc(rightText)}</span></div>
+      <div class="pfoot" style="font-size:8.5px;color:${pal.ink3}"><span>${esc(left)}</span><span>${esc(rightText)}</span><span>${esc(CREDIT)}</span></div>
     </div>`;
   };
 
@@ -4413,6 +4568,7 @@ function buildPrintSheets(){
           }).join("")}
         </div>
         <div style="font:400 9.5px ${FAM.mono};color:${pal.ink3};margin-top:12px;line-height:1.7">
+          ${esc(CREDIT)}<br>
           Sheets are numbered left to right, top to bottom.<br>
           Trim to the corner marks, overlap each sheet onto the one to its left and above, then tape from behind.
         </div>
@@ -4468,7 +4624,7 @@ function buildPrintSheets(){
              <div style="font:400 12.5px/1.7 ${FAM.ui};color:${pal.ink};white-space:pre-wrap">${esc(p.notes)}</div></div>` : ""}
           <div style="margin-top:auto;padding-top:14px;border-top:1px solid ${pal.line}">
             <div class="pfoot" style="font-size:8.5px;color:${pal.ink3}">
-              <span>${esc(printOpts.title || guessTitle())}</span><span>${n + 1} of ${order.length}</span></div>
+              <span>${esc(printOpts.title || guessTitle())}</span><span>${esc(CREDIT)}</span><span>${n + 1} of ${order.length}</span></div>
           </div>
         </div>
       </div>`;
@@ -4492,6 +4648,7 @@ function buildPrintSheets(){
             <rect width="${q.size}" height="${q.size}" fill="#fff"/><path d="${q.d}" fill="#141C22"/></svg>
           <div style="font:400 ${(qpx*0.075).toFixed(1)}px ${FAM.mono};color:${pal.ink2};margin-top:${(qpx*0.03).toFixed(1)}px">
             scan to add yourself</div></div>` : ""}
+      <div style="position:absolute;right:${plan.m}px;top:${plan.m}px;font:400 ${(plan.trimW*0.008).toFixed(1)}px ${FAM.mono};color:${pal.ink3};opacity:.75">${esc(CREDIT)}</div>
       ${printOpts.note ? `<div style="position:absolute;left:${plan.m}px;bottom:${plan.m}px;
           font:400 ${(plan.trimW*0.011).toFixed(1)}px ${FAM.mono};color:${pal.ink3}">${esc(printOpts.note)}</div>` : ""}
       ${plan.bleed ? [[0,0],[1,0],[0,1],[1,1]].map(([cx,cy]) =>
@@ -4611,7 +4768,7 @@ async function exportSVG(){
   if(!model) return;
   const hasTitle = !!(printOpts.title || printOpts.subtitle);
   const box = boxWithTitle(model, hasTitle);
-  const inner = viewSVG(model, {selectable:false, ns:"ex", pal:printPal(),
+  const inner = viewSVG(model, {selectable:false, ns:"ex", credit:true, pal:printPal(),
                                 title: hasTitle ? {main:printOpts.title, sub:printOpts.subtitle} : null});
   const style = `
     @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Mono&family=Public+Sans:wght@400;500;600&family=Noto+Sans+Devanagari:wght@400;500;600&family=Noto+Serif+Devanagari:wght@400;600&display=swap");
@@ -4627,6 +4784,7 @@ async function exportSVG(){
     .sire{fill:var(--ink-3);font:400 9.5px var(--f-ui)}
     .mono-bg{fill:hsl(var(--h) 26% 85%)}.mono-tx{fill:hsl(var(--h) 32% 30%);font:600 13px var(--f-ui)}
     .link{fill:none;stroke:var(--line-2);stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+    .link.dashed{stroke-dasharray:5 4}
     .link.cross{stroke:var(--accent-ring);stroke-dasharray:2 4;stroke-width:1.2}
     .ulink{stroke:var(--brass);stroke-width:1.6;fill:none}.ulink.div{stroke-dasharray:5 3}
     .uband{fill:var(--brass-tint);stroke:var(--brass);stroke-width:1}
