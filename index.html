@@ -288,6 +288,18 @@ button{cursor:pointer;background:none;border:0;padding:0}
 
 /* app-chrome attribution — deliberately not on the printed chart,
    which carries the family's own title and footer instead */
+.shop-list{display:grid;gap:6px}
+.shop-item{display:flex;align-items:center;gap:10px;padding:9px 11px;
+  border:1px solid var(--line);border-radius:10px;cursor:pointer;
+  transition:border-color .15s ease,background .15s ease}
+.shop-item:hover{border-color:var(--brass);background:var(--panel-2,transparent)}
+.shop-item input{margin:0;flex:none}
+.shop-item span{flex:1;display:flex;flex-direction:column;gap:1px;min-width:0}
+.shop-item b{font-size:13px;font-weight:600}
+.shop-item i{font-style:normal;font-size:11px;color:var(--ink-3)}
+.shop-item em{font-style:normal;font-size:12px;color:var(--brass);
+  font-family:var(--f-mono);white-space:nowrap}
+.shop-item:has(input:checked){border-color:var(--brass)}
 .credit{
   position:absolute;left:50%;bottom:17px;transform:translateX(-50%);
   font-family:var(--f-mono);font-size:10px;letter-spacing:.08em;
@@ -740,7 +752,19 @@ kbd{
   .only-narrow-block{display:block}
   .hide-narrow{display:none !important}
   .legend{display:none}
-  .credit{font-size:9px;bottom:8px}
+  .shop-list{display:grid;gap:6px}
+.shop-item{display:flex;align-items:center;gap:10px;padding:9px 11px;
+  border:1px solid var(--line);border-radius:10px;cursor:pointer;
+  transition:border-color .15s ease,background .15s ease}
+.shop-item:hover{border-color:var(--brass);background:var(--panel-2,transparent)}
+.shop-item input{margin:0;flex:none}
+.shop-item span{flex:1;display:flex;flex-direction:column;gap:1px;min-width:0}
+.shop-item b{font-size:13px;font-weight:600}
+.shop-item i{font-style:normal;font-size:11px;color:var(--ink-3)}
+.shop-item em{font-style:normal;font-size:12px;color:var(--brass);
+  font-family:var(--f-mono);white-space:nowrap}
+.shop-item:has(input:checked){border-color:var(--brass)}
+.credit{font-size:9px;bottom:8px}
 }
 </style>
 
@@ -1118,7 +1142,29 @@ const FAM = {ui:'"Public Sans","Noto Sans Devanagari",sans-serif',
 /* ── state ─────────────────────────────────────────────── */
 const KEY = "heirloom.v1";
 const CREDIT = "Stunity Tech \u2014 by Prateek";
-const BUILD = "2026-09-11b";   // shown in Help, so a stale cached copy is obvious
+
+/* ── The print shop ────────────────────────────────────────────────────
+   Orders are quoted, not charged up front: the price depends on how big
+   the family is and where it is going, and nobody pays 1,500 rupees for
+   a wall poster without asking a question first. Set a price on an item
+   and it is shown instead of "quoted"; set payLink and a Pay button
+   appears beside Send. Flip enabled to false to hide the whole thing. */
+const PRINT_SHOP = {
+  enabled : true,
+  whatsapp: "919021306979",
+  email   : "prateekheda@yahoo.com",
+  payLink : "",                 // a Razorpay payment link, once there is one
+  currency: "\u20b9",
+  items   : [
+    {k:"a3",   label:"A3 poster",       note:"30 \u00d7 42 cm, matte 250gsm",   price:null},
+    {k:"a2",   label:"A2 poster",       note:"42 \u00d7 59 cm, matte 250gsm",   price:null},
+    {k:"a1",   label:"A1 poster",       note:"59 \u00d7 84 cm, matte 250gsm",   price:null},
+    {k:"flex", label:"Flex banner",     note:"4 ft wide, for the hall",     price:null},
+    {k:"book", label:"Booklet",         note:"A4, a family to a spread",    price:null},
+    {k:"frame",label:"Framed print",    note:"A3 or A2, wood frame",        price:null}
+  ]
+};
+const BUILD = "2026-09-16a";   // shown in Help, so a stale cached copy is obvious
 let S = blankDoc();
 let ui = {
   view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
@@ -4354,6 +4400,116 @@ function printPal(){
 }
 function paperFill(){ return TINTS[printOpts.tint] || "#FFFFFF"; }
 
+/* Build the order from what is already on screen, then hand it to
+   WhatsApp. A share link carries the family, so nothing needs storing.
+   Photos are left out: they are data URIs, and a link carrying them can
+   run to hundreds of kilobytes, which no message will take. */
+function printShopDialog(){
+  const SHOP = PRINT_SHOP;
+  const items = SHOP.items;
+  const priceOf = i => i.price ? SHOP.currency + i.price : "quoted";
+  openModal(`
+    <div class="modal">
+      <div class="modal-head"><div style="flex:1">
+        <h2>Get it printed</h2>
+        <p>We print it and post it to you. Tell us what you want and we\u2019ll come back with a price.</p>
+      </div>
+      <button class="btn icon ghost" data-close aria-label="Close">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <fieldset style="padding-top:0"><legend>What to print</legend>
+          <div class="shop-list">
+            ${items.map((i, n) => `<label class="shop-item">
+              <input type="radio" name="shopItem" value="${esc(i.k)}"${n === 0 ? " checked" : ""}>
+              <span><b>${esc(i.label)}</b><i>${esc(i.note)}</i></span>
+              <em>${esc(priceOf(i))}</em></label>`).join("")}
+          </div>
+          <label class="f" style="margin-top:10px"><span>How many</span>
+            <input id="shopQty" type="number" min="1" max="50" value="1"></label>
+        </fieldset>
+
+        <fieldset><legend>Who to send it to</legend>
+          <label class="f"><span>Your name</span><input id="shopName" autocomplete="name"></label>
+          <label class="f" style="margin-top:8px"><span>Phone</span>
+            <input id="shopPhone" type="tel" inputmode="tel" autocomplete="tel"></label>
+          <label class="f" style="margin-top:8px"><span>Town or city</span>
+            <input id="shopCity" autocomplete="address-level2"></label>
+          <label class="f" style="margin-top:8px"><span>Anything else</span>
+            <textarea id="shopNote" style="min-height:58px" placeholder="A frame, a date you need it by, a spelling to fix\u2026"></textarea></label>
+        </fieldset>
+
+        <div class="notice">
+          <b>This sends your family tree to us.</b> The order carries a link holding the
+          names and dates on your chart \u2014 we cannot print it without them. Photographs
+          are left out of that link; we\u2019ll ask for them separately if your design uses
+          them. See the <a href="privacy.html" target="_blank" rel="noopener">privacy note</a>.
+        </div>
+      </div>
+      <div class="modal-foot">
+        <span class="spring"></span>
+        <button class="btn" data-close>Cancel</button>
+        ${SHOP.payLink ? `<button class="btn" id="shopPay">Pay now</button>` : ""}
+        <button class="btn primary" id="shopSend">Send on WhatsApp</button>
+      </div>
+    </div>`);
+
+  if(SHOP.payLink) $("#shopPay").addEventListener("click", () => {
+    window.open(SHOP.payLink, "_blank", "noopener");
+  });
+
+  $("#shopSend").addEventListener("click", async () => {
+    const picked = document.querySelector('input[name="shopItem"]:checked');
+    const item = items.find(i => i.k === (picked && picked.value)) || items[0];
+    const qty  = Math.max(1, Math.min(50, parseInt($("#shopQty").value, 10) || 1));
+    const name = $("#shopName").value.trim();
+    const phone = $("#shopPhone").value.trim();
+    if(!name || !phone) return toast("Your name and phone, please", true);
+    const city = $("#shopCity").value.trim();
+    const note = $("#shopNote").value.trim();
+
+    let link = "";
+    try { link = await shareURL({photos:false, view:ui.view, base:HOSTED_URL}); }
+    catch(e){ link = ""; }
+
+    const L = ["Heirloom print order", ""];
+    L.push("Item: " + item.label + " (" + item.note + ")");
+    L.push("Quantity: " + qty);
+    if(item.price) L.push("Listed: " + SHOP.currency + item.price + " each");
+    L.push("Family: " + (S.meta.title || guessTitle() || "\u2014"));
+    L.push("People on the chart: " + Object.keys(S.people).length);
+    L.push("View: " + (VIEW_NAME[ui.view] || ui.view));
+    L.push("");
+    L.push("Name: " + name);
+    L.push("Phone: " + phone);
+    if(city) L.push("City: " + city);
+    if(note) L.push("Notes: " + note);
+    L.push("");
+
+    /* A message that is too long simply will not open, so past a safe
+       length the tree goes to the clipboard and a family file downloads
+       instead, for them to attach in the chat. */
+    /* The link always goes to the clipboard, so nothing is lost even when
+       it is too big to ride along in the message. */
+    if(link){ try { await navigator.clipboard.writeText(link); } catch(e){} }
+    const wa = m => "https://wa.me/" + SHOP.whatsapp + "?text=" + encodeURIComponent(m);
+    const URL_LIMIT = 3500;          // comfortably inside what phones accept
+    let url = "";
+    if(link){
+      const withLink = L.concat("Tree: " + link).join("\n");
+      if(wa(withLink).length <= URL_LIMIT) url = wa(withLink);
+    }
+    if(!url){
+      L.push("Tree: too big for a message \u2014 family file attached, link copied.");
+      url = wa(L.join("\n"));
+      exportJSON();
+      toast("Family file saved \u2014 attach it in the chat");
+    }
+    window.open(url, "_blank", "noopener");
+    closeModal();
+  });
+}
+
 function printDialog(){
   if(!LAY){ return toast("Nothing to print yet", true); }
   printOpts.qrUrl = "";                 // the family may have changed since last time
@@ -4525,6 +4681,7 @@ function printDialog(){
       </div>
       </div>
       <div class="modal-foot">
+        ${PRINT_SHOP.enabled ? `<button class="btn" id="pShop">Get it printed</button>` : ""}
         <span class="spring"></span>
         <button class="btn" data-close>Close</button>
         <button class="btn primary" id="pGo">Print</button>
@@ -4612,6 +4769,7 @@ function printDialog(){
   $("#pXLSX").addEventListener("click", () => { read(); exportXLSX(); });
   $("#pCSV").addEventListener("click", () => { read(); exportCSV(); });
   $("#pJSON").addEventListener("click", () => { read(); exportJSON(); });
+  if(PRINT_SHOP.enabled) $("#pShop").addEventListener("click", () => { read(); printShopDialog(); });
   read();
 }
 function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }

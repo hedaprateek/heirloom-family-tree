@@ -208,6 +208,35 @@ and turn **headers and footers off**); **PNG** at 150/300/600 dpi sized to the
 paper you chose; **SVG**; **Excel** or **CSV** (see below); and the raw
 **family file** as JSON.
 
+## Having it printed for you
+
+Not everyone owns a printer that takes A1 paper, and most people would rather
+not stand in a print shop explaining what a family tree is. **Get it printed**,
+in the print dialog's footer, turns a finished chart into an order: pick a size —
+A3, A2, A1, a flex banner, a booklet, or framed — say how many, leave a name and
+a phone number, and it opens WhatsApp with the whole order written out.
+
+Prices are **quoted rather than listed**, because what a poster costs depends on
+how big the family is and where it is going. Each item shows *quoted* until a
+price is set for it.
+
+**It works without a server, and it never needed one.** The order carries a share
+link holding the names and dates on the chart, because that is the thing being
+printed. Photographs are deliberately left out of that link — they are embedded
+images, and a link carrying them would be far too long to send — so they are
+asked for separately. The link is copied to the clipboard every time, and if a
+family is large enough that the message would not open, the family file is saved
+instead to attach in the chat.
+
+This is the one action in Heirloom that sends your tree anywhere. It is opt-in,
+it is described in plain words before you press send, and
+[privacy.html](privacy.html) says exactly what travels and what does not. Print
+it yourself instead and nothing leaves the browser, as always.
+
+Everything configurable — the number it messages, the list of sizes, prices, and
+an optional payment link — sits in one `PRINT_SHOP` object near the top of
+`index.html`.
+
 ## Spreadsheets
 
 **File ▸ Blank spreadsheet to fill in** gives you an `.xlsx` with the columns
