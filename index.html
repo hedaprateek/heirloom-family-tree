@@ -880,6 +880,21 @@ kbd{
 <meta name="twitter:title" content="Heirloom — a family tree you can actually print">
 <meta name="twitter:description" content="Build your family tree in the browser and print it as a poster, a book or a flex banner for the next gathering. Works offline, and nothing you type ever leaves your device.">
 <meta name="twitter:image" content="https://hedaprateek.github.io/heirloom-family-tree/og.png">
+
+<!-- Cloudflare Web Analytics: cookieless, collects no personal data and
+     sets nothing on the device, so it needs no consent banner. Every site
+     here shares one origin, so ONE site token covers all of them and the
+     dashboard splits the numbers by path. Until a real token is pasted in
+     below, the guard returns early and nothing is loaded at all. -->
+<script>(function(){
+  var t = "__CF_BEACON_TOKEN__";
+  if (!t || t.charAt(0) === "_") return;          // not configured yet
+  var s = document.createElement("script");
+  s.defer = true;
+  s.src = "https://static.cloudflareinsights.com/beacon.min.js";
+  s.setAttribute("data-cf-beacon", JSON.stringify({ token: t }));
+  document.head.appendChild(s);
+})();</script>
 </head>
 <body>
 

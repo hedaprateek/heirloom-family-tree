@@ -60,6 +60,21 @@
   footer a{color:inherit;text-decoration:none;border-bottom:1px solid transparent}
   footer a:hover{border-bottom-color:currentColor}
 </style>
+
+<!-- Cloudflare Web Analytics: cookieless, collects no personal data and
+     sets nothing on the device, so it needs no consent banner. Every site
+     here shares one origin, so ONE site token covers all of them and the
+     dashboard splits the numbers by path. Until a real token is pasted in
+     below, the guard returns early and nothing is loaded at all. -->
+<script>(function(){
+  var t = "__CF_BEACON_TOKEN__";
+  if (!t || t.charAt(0) === "_") return;          // not configured yet
+  var s = document.createElement("script");
+  s.defer = true;
+  s.src = "https://static.cloudflareinsights.com/beacon.min.js";
+  s.setAttribute("data-cf-beacon", JSON.stringify({ token: t }));
+  document.head.appendChild(s);
+})();</script>
 </head>
 <body>
 <div class="wrap">
@@ -87,14 +102,14 @@
 
   <h2>What never leaves your device</h2>
   <p>
-    The app makes <strong>no network requests carrying your data</strong>. There
-    is no analytics, no tracking pixel, no error reporting, and no
-    &ldquo;anonymous usage statistics&rdquo;. Printing, PDF export, PNG export
-    and spreadsheet import all happen locally.
+    The app makes <strong>no network requests carrying your data</strong>. Your
+    family never travels anywhere: no tracking pixel, no error reporting, and
+    nothing you type is ever transmitted. Printing, PDF export, PNG export and
+    spreadsheet import all happen locally, on your own machine.
   </p>
 
   <div class="box">
-    <h2>The three things that do reach the internet</h2>
+    <h2>The four things that do reach the internet</h2>
     <p>Stated plainly, because &ldquo;fully private&rdquo; would be a lie:</p>
     <ul>
       <li>
@@ -113,6 +128,14 @@
         browser&rsquo;s own speech service does the transcription. In Chrome
         that means <strong>the audio is sent to Google</strong>. Don&rsquo;t
         dictate anything you would not say in front of Google — type it instead.
+      </li>
+      <li>
+        <strong>Counting visits.</strong> This site counts how many people open
+        each page, using Cloudflare Web Analytics. It is <strong>cookieless</strong>:
+        nothing is stored on your device and you are not followed from site to
+        site. It records the page address, where you arrived from, your country
+        and your browser — and never anything you typed into Heirloom, because
+        that is not sent anywhere in the first place.
       </li>
     </ul>
   </div>
