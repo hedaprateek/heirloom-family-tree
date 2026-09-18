@@ -269,6 +269,22 @@ There is a search box, and it reads by keyboard and screen reader too.
 Every copy carries the studio credit and a link back, so a family group passing it
 around is the only advertising this needs.
 
+## A short film, and cards to send
+
+**Film** makes a looping GIF of the family filling in, one generation settling
+onto the last — five seconds that say what the chart takes five minutes to say.
+Three sizes, from small enough for any chat to large enough for a screen. It
+films whichever view is showing; the register chart and the grown tree both look
+well. A GIF because every phone and every chat app plays one without being asked,
+and because a flat cream-and-ink register is exactly what 256 colours were made
+for. The encoder is written here, like the zip and the QR code before it.
+
+**Story cards** give one person a square: the photograph, the name, the years,
+where they lived and what they did, a line of what was written about them, and
+who they belonged to — *d/o Govind & Sarala Joshi*, married, three children. One
+card as a PNG, or everybody in a single zip. Square because that is the shape a
+phone screen hands back, for a birthday or a remembrance day.
+
 ## Other genealogy programs
 
 **File ▸ Import a GEDCOM** reads the `.ged` that Ancestry, FamilySearch,

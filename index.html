@@ -4909,6 +4909,8 @@ function printDialog(){
             <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:10px">
               <button class="btn sm primary" id="pPDF">PDF</button>
               <button class="btn sm" id="pPage">Living page</button>
+              <button class="btn sm" id="pFilm">Film</button>
+              <button class="btn sm" id="pCards">Story cards</button>
               <button class="btn sm" id="pPNG">PNG</button>
               <button class="btn sm" id="pSVG">SVG</button>
               <button class="btn sm" id="pXLSX">Excel</button>
@@ -5027,6 +5029,8 @@ function printDialog(){
   $("#pGo").addEventListener("click", () => { read(); gate("print", doPrint); });
   $("#pPDF").addEventListener("click", () => { read(); gate("pdf", exportPDF); });
   $("#pPage").addEventListener("click", () => { read(); gate("page", () => exportLiving(true)); });
+  $("#pFilm").addEventListener("click", () => { read(); gate("film", filmDialog); });
+  $("#pCards").addEventListener("click", () => { read(); gate("cards", cardsDialog); });
   $("#pPNG").addEventListener("click", () => { read(); gate("png", exportPNG); });
   $("#pSVG").addEventListener("click", () => { read(); gate("svg", exportSVG); });
   $("#pXLSX").addEventListener("click", () => { read(); exportXLSX(); });
@@ -5826,6 +5830,415 @@ function EXPORT_CSS(root){
     .title-main{fill:var(--ink);font:600 34px var(--f-disp)}.title-sub{fill:var(--ink-2);font:400 14px var(--f-ui)}
     .title-rule{stroke:var(--brass);stroke-width:1.5}`;
 }
+/* ── the film ──────────────────────────────────────────────
+   A poster hangs on one wall and a living page waits to be opened. A
+   short film of the family growing, generation settling onto generation,
+   is the thing somebody posts — and it says in five seconds what the
+   chart says in five minutes.
+
+   It is written out as a GIF, and a GIF written here rather than fetched
+   from anywhere: every phone and every chat app plays one without asking
+   what it is, and the register palette — flat cream, ink, brass — is
+   exactly what a 256-colour format was made for. The encoder below is
+   the whole of it: a palette taken from the artwork itself, then LZW.
+   ──────────────────────────────────────────────────────── */
+
+/** A palette built from the picture: the commonest colours it actually uses. */
+function gifPalette(frames, want){
+  const count = new Map();
+  /* five bits a channel. Four was not enough: the paper is #F4F2EA and the
+     cards are barely off-white, and at four bits they all rounded apart into
+     something yellow. Only the fullest frames are counted — by the last one
+     every colour in the film has appeared. */
+  for(const px of frames){
+    for(let i = 0; i < px.length; i += 4){
+      const k = ((px[i] >> 3) << 10) | ((px[i+1] >> 3) << 5) | (px[i+2] >> 3);
+      count.set(k, (count.get(k) || 0) + 1);
+    }
+  }
+  const top = [...count.entries()].sort((a, b) => b[1] - a[1]).slice(0, want);
+  const mid = v => (v << 3) | 4;                 // the middle of the bucket
+  const pal = top.map(([k]) => [mid((k >> 10) & 31), mid((k >> 5) & 31), mid(k & 31)]);
+  while(pal.length < 2) pal.push([255, 255, 255]);
+  return pal;
+}
+/** Nearest colour in the palette, remembered so each one is worked out once. */
+function gifMapper(pal){
+  const cache = new Map();
+  return (r, g, b) => {
+    const key = (r << 16) | (g << 8) | b;
+    let v = cache.get(key);
+    if(v !== undefined) return v;
+    let best = 0, bd = Infinity;
+    for(let i = 0; i < pal.length; i++){
+      const dr = r - pal[i][0], dg = g - pal[i][1], db = b - pal[i][2];
+      const d = dr*dr*3 + dg*dg*4 + db*db;   // eyes weigh green heaviest
+      if(d < bd){ bd = d; best = i; }
+    }
+    cache.set(key, best);
+    return best;
+  };
+}
+/** GIF's flavour of LZW. */
+function gifLZW(ind, minCode){
+  const out = [];
+  let cur = 0, bits = 0;
+  const clear = 1 << minCode, eoi = clear + 1;
+  let size = minCode + 1, next = eoi + 1, dict = new Map();
+  const put = code => {
+    cur |= code << bits; bits += size;
+    while(bits >= 8){ out.push(cur & 255); cur >>= 8; bits -= 8; }
+  };
+  put(clear);
+  let prefix = ind[0];
+  for(let i = 1; i < ind.length; i++){
+    const k = ind[i], key = prefix * 256 + k;
+    const have = dict.get(key);
+    if(have !== undefined){ prefix = have; continue; }
+    put(prefix);
+    dict.set(key, next++);
+    if(next > 4096){ put(clear); dict = new Map(); next = eoi + 1; size = minCode + 1; }
+    else if(next > (1 << size) && size < 12) size++;
+    prefix = k;
+  }
+  put(prefix); put(eoi);
+  if(bits > 0) out.push(cur & 255);
+  return out;
+}
+/** Wrap a byte stream in GIF's sub-blocks, none longer than 255. */
+function gifBlocks(bytes, push){
+  for(let i = 0; i < bytes.length; i += 255){
+    const chunk = bytes.slice(i, i + 255);
+    push(chunk.length);
+    for(const b of chunk) push(b);
+  }
+  push(0);
+}
+/**
+ * frames: [{px: Uint8ClampedArray, delay: centiseconds}] — all the same size.
+ */
+function gifFile(frames, w, h){
+  /* the last frame holds everything that ever appears, and one from the middle
+     catches anything a fade tinted on the way — counting all of them would be
+     millions of pixels for the same answer */
+  const sample = [frames[frames.length - 1].px];
+  if(frames.length > 3) sample.push(frames[Math.floor(frames.length / 2)].px);
+  const pal = gifPalette(sample, 256);
+  const map = gifMapper(pal);
+  let bits = 1; while((1 << bits) < pal.length) bits++;      // 1..8
+  const size = 1 << bits;
+  const out = [];
+  const push = b => out.push(b & 255);
+  const short = n => { push(n); push(n >> 8); };
+  const str = s => { for(let i = 0; i < s.length; i++) push(s.charCodeAt(i)); };
+
+  str("GIF89a");
+  short(w); short(h);
+  push(0xF0 | (bits - 1));          // global table, this many colours
+  push(0); push(0);
+  for(let i = 0; i < size; i++){
+    const c = pal[i] || [0, 0, 0];
+    push(c[0]); push(c[1]); push(c[2]);
+  }
+  /* loop for ever */
+  push(0x21); push(0xFF); push(11); str("NETSCAPE2.0"); push(3); push(1); short(0); push(0);
+
+  const minCode = Math.max(2, bits);
+  for(const f of frames){
+    push(0x21); push(0xF9); push(4); push(0x04);   // leave the last frame in place
+    short(Math.max(2, f.delay)); push(0); push(0);
+    push(0x2C); short(0); short(0); short(w); short(h); push(0);
+    const ind = new Uint8Array(w * h);
+    for(let i = 0, p = 0; i < f.px.length; i += 4, p++) ind[p] = map(f.px[i], f.px[i+1], f.px[i+2]);
+    push(minCode);
+    gifBlocks(gifLZW(ind, minCode), push);
+  }
+  push(0x3B);
+  return new Blob([new Uint8Array(out)], {type:"image/gif"});
+}
+
+const FILM_SIZES = {small:{w:480, label:"480px — small enough for any chat"},
+                    medium:{w:720, label:"720px — the usual"},
+                    large:{w:1000, label:"1000px — for a big screen"}};
+/**
+ * The family arriving, one generation at a time, as a looping GIF.
+ * Nothing is re-laid-out: the finished artwork is painted once and then
+ * uncovered band by band, which is both quicker and truer to the chart.
+ */
+async function exportFilm(sizeKey){
+  const model = makeModel(PAL.light);
+  if(!model) return toast("Nothing to film yet", true);
+  const W0 = (FILM_SIZES[sizeKey] || FILM_SIZES.medium).w;
+  const box = model.box;
+  const pad = 26;
+  const scale = Math.min((W0 - pad*2) / box.w, 1.4);
+  const W = W0, H = Math.max(140, Math.round(box.h * scale) + pad*2 + 34);
+  if(W * H > 4.2e6) return toast("That family is too big to film at this size", true);
+
+  toast("Making the film…");
+  await new Promise(r => setTimeout(r, 30));
+
+  const art = viewPaint(model, scale, PAL.light, null);
+  const pal = PAL.light;
+  const cv = document.createElement("canvas");
+  cv.width = W; cv.height = H;
+  const x = cv.getContext("2d", {willReadFrequently:true});
+  const ox = Math.round((W - art.width) / 2), oy = pad + 30;
+
+  /* the bands to uncover: one per generation where the view has them */
+  const rows = (model.rows || []).map(r => (r.y - box.y) * scale + oy).sort((a, b) => a - b);
+  const stops = [];
+  if(rows.length > 1){
+    for(let i = 1; i < rows.length; i++) stops.push(rows[i] - (rows[i] - rows[i-1]) * 0.22);
+    stops.push(H);
+  } else {
+    for(let i = 1; i <= 6; i++) stops.push(oy + (H - oy) * i / 6);
+  }
+
+  const title = printOpts.title || guessTitle();
+  const sub = yearSpan() || printOpts.subtitle || "";
+  const frame = (cut, fade) => {
+    x.fillStyle = paperFill() || "#FFFFFF";
+    x.fillRect(0, 0, W, H);
+    x.save();
+    x.beginPath(); x.rect(0, 0, W, cut); x.clip();
+    x.drawImage(art, ox, oy);
+    x.restore();
+    if(fade > 0 && fade < 1){                  // the band arriving, part way in
+      x.save();
+      x.globalAlpha = fade;
+      x.beginPath(); x.rect(0, cut, W, H - cut); x.clip();
+      x.drawImage(art, ox, oy);
+      x.restore();
+    }
+    /* the heading, and the credit that travels with every copy */
+    x.fillStyle = pal.ink;
+    x.font = `600 ${Math.max(13, Math.round(W / 34))}px ${FAM.disp}`;
+    x.textAlign = "left";
+    x.fillText(title, pad, pad + 14);
+    if(sub){
+      x.fillStyle = pal.ink3;
+      x.font = `400 ${Math.max(9, Math.round(W / 66))}px ${FAM.mono}`;
+      x.fillText(sub, pad, pad + 30);
+    }
+    x.fillStyle = pal.ink3;
+    x.font = `400 ${Math.max(8, Math.round(W / 80))}px ${FAM.mono}`;
+    x.textAlign = "right";
+    x.fillText(CREDIT, W - pad, H - 12);
+    x.textAlign = "left";
+    return x.getImageData(0, 0, W, H).data;
+  };
+
+  const frames = [];
+  let cut = oy - 6;
+  frames.push({px:frame(cut, 0), delay:70});          // a beat on the empty sheet
+  for(const s of stops){
+    for(let k = 1; k <= 3; k++) frames.push({px:frame(cut, k / 3 * 0.9), delay:9});
+    cut = s;
+    frames.push({px:frame(cut, 0), delay:16});
+    if(frames.length > 90) break;                      // a very deep family still ends
+  }
+  frames.push({px:frame(H, 0), delay:260});            // and hold, so it can be read
+  await new Promise(r => setTimeout(r, 0));
+
+  const blob = gifFile(frames, W, H);
+  const ok = await offer(slug() + ".gif", blob, "image/gif");
+  if(ok) toast("Film saved · " + frames.length + " frames · "
+               + (blob.size > 1048576 ? (blob.size/1048576).toFixed(1) + " MB" : Math.round(blob.size/1024) + " KB"));
+}
+/* ── story cards ───────────────────────────────────────────
+   One person, one square, on the paper the register is printed on: the
+   photograph if there is one, the name, the years, where they lived and
+   what they did, a line of what was written about them, and who they
+   belonged to. Square because that is the shape every phone screen wants
+   back — a status, a post, a thing sent on somebody's birthday or on the
+   day they are remembered.
+   ──────────────────────────────────────────────────────── */
+function storyCard(pid, S0){
+  const p = P(pid); if(!p) return null;
+  const size = S0 || 1080, pal = PAL.light, idx = buildIndex(), info = idx[pid] || {};
+  const cv = document.createElement("canvas");
+  cv.width = size; cv.height = size;
+  const x = cv.getContext("2d");
+  const u = size / 1080;                                   // everything in 1080ths
+  x.fillStyle = paperFill() || "#FAF5E9";
+  x.fillRect(0, 0, size, size);
+
+  /* a hairline frame, the way a mounted photograph is edged */
+  x.strokeStyle = pal.brass; x.lineWidth = Math.max(1, 2*u); x.globalAlpha = .5;
+  x.strokeRect(38*u, 38*u, size - 76*u, size - 76*u);
+  x.globalAlpha = 1;
+
+  const cx = size / 2;
+  /* measure before drawing: a card for someone with a photograph, a trade and
+     a story should sit as comfortably as one with nothing but a name, and
+     neither should pile up at the top of the square */
+  const nameOf = fullName(p);
+  let nameSize = 58;
+  x.font = `600 ${nameSize*u}px ${FAM.disp}`;
+  while(nameSize > 30 && x.measureText(nameOf).width > size - 150*u){
+    nameSize -= 3; x.font = `600 ${nameSize*u}px ${FAM.disp}`;
+  }
+  const idx2 = idx, info2 = info;
+  const par0 = (info2.parents || []).filter(q => P(q));
+  const kin0 = par0.length ? kinLine(p, par0) : "";
+  const sp0 = (info2.unions || []).map(uid => { const s = partnerOf(U(uid), pid); return s && P(s) ? fullName(P(s)) : ""; }).filter(Boolean);
+  const kids0 = (info2.kids || []).length;
+  const belong0 = [kin0, sp0.length ? "married " + sp0.join(" & ") : "",
+                   kids0 ? kids0 + (kids0 === 1 ? " child" : " children") : ""].filter(Boolean);
+  let note0 = [];
+  if(p.notes){
+    x.font = `italic 400 ${27*u}px ${FAM.disp}`;
+    note0 = wrapText(x, p.notes.replace(/\s*\n+\s*/g, " "), size - 210*u).slice(0, 3);
+  }
+  const R = 150*u;
+  const bodyH = R*2 + 92*u + (p.maiden ? 34*u : 0) + 46*u
+              + ((p.place || p.occupation) ? 44*u : 0)
+              + (belong0.length ? 50*u + belong0.length * 32*u : 0)
+              + (note0.length ? 22*u + note0.length * 38*u : 0);
+  const top = 92*u, foot = size - 120*u;                 // between frame and footer
+  const phTop = Math.max(top, top + ((foot - top) - bodyH) / 2);
+  x.save();
+  x.beginPath(); x.arc(cx, phTop + R, R, 0, Math.PI*2); x.closePath(); x.clip();
+  const img = p.photo ? photoCache[pid] : null;
+  if(img && img.width){
+    const s = Math.max(R*2 / img.width, R*2 / img.height);
+    x.drawImage(img, cx - img.width*s/2, phTop + R - img.height*s/2, img.width*s, img.height*s);
+  } else {
+    const h = hueOf(p);
+    x.fillStyle = `hsl(${h} 26% 85%)`; x.fillRect(cx - R, phTop, R*2, R*2);
+    x.fillStyle = `hsl(${h} 32% 30%)`;
+    x.font = `600 ${118*u}px ${FAM.ui}`; x.textAlign = "center"; x.textBaseline = "middle";
+    x.fillText(initials(p), cx, phTop + R);
+  }
+  x.restore();
+  x.strokeStyle = pal.line2; x.lineWidth = Math.max(1, 1.5*u);
+  x.beginPath(); x.arc(cx, phTop + R, R, 0, Math.PI*2); x.stroke();
+
+  x.textAlign = "center"; x.textBaseline = "alphabetic";
+  let y = phTop + R*2 + 92*u;
+  x.fillStyle = pal.ink;
+  x.font = `600 ${nameSize*u}px ${FAM.disp}`;     // stepped down earlier if it was long
+  x.fillText(nameOf, cx, y);
+  if(p.maiden){
+    y += 34*u; x.fillStyle = pal.ink3;
+    x.font = `italic 400 ${25*u}px ${FAM.ui}`;
+    x.fillText("née " + p.maiden, cx, y);
+  }
+  y += 46*u;
+  x.fillStyle = pal.brass;
+  x.font = `400 ${27*u}px ${FAM.mono}`;
+  const life = [fmtDate(parseDate(p.birth), "short"), fmtDate(parseDate(p.death), "short")];
+  x.fillText(life[0] || life[1] ? (life[0] ? "∗ " + life[0] : "") + (life[1] ? "   † " + life[1] : "")
+                                : "dates not recorded", cx, y);
+  if(p.place || p.occupation){
+    y += 44*u; x.fillStyle = pal.ink2;
+    x.font = `400 ${28*u}px ${FAM.ui}`;
+    x.fillText([p.place, p.occupation].filter(Boolean).join("  ·  "), cx, y);
+  }
+  /* the line of belonging, which is the whole point of a family card —
+     worked out by the measuring pass above, so the two cannot disagree */
+  const belong = belong0;
+  if(belong.length){
+    y += 50*u; x.fillStyle = pal.ink3;
+    x.font = `400 ${24*u}px ${FAM.ui}`;
+    belong.forEach(b => { x.fillText(b, cx, y); y += 32*u; });
+  }
+  if(note0.length){
+    y += 22*u; x.fillStyle = pal.ink;
+    x.font = `italic 400 ${27*u}px ${FAM.disp}`;
+    const lines = note0;
+    lines.forEach((ln, i) => {
+      x.fillText((i === 0 ? "“" : "") + ln + (i === lines.length - 1 ? "”" : ""), cx, y);
+      y += 38*u;
+    });
+  }
+  x.fillStyle = pal.ink3;
+  x.font = `400 ${19*u}px ${FAM.mono}`;
+  x.fillText(printOpts.title || guessTitle(), cx, size - 76*u);
+  x.font = `400 ${16*u}px ${FAM.mono}`;
+  x.fillText(CREDIT, cx, size - 52*u);
+  return cv;
+}
+function cardBlob(cv){ return new Promise(r => cv.toBlob(b => r(b), "image/png")); }
+async function exportCards(which){
+  const ids = which === "one" ? [ui.sel]
+            : Object.keys(S.people).filter(id => !which || which === "all" || !INLAW[id]);
+  const list = ids.filter(id => id && P(id));
+  if(!list.length) return toast("Nobody chosen", true);
+  if(list.length === 1){
+    const cv = storyCard(list[0]);
+    const ok = await offer(slug() + "-" + (fullName(P(list[0])).toLowerCase().replace(/[^a-z0-9]+/g, "-") || "card") + ".png",
+                           await cardBlob(cv), "image/png");
+    if(ok) toast("Card saved · 1080 × 1080");
+    return;
+  }
+  toast("Drawing " + list.length + " cards…");
+  await new Promise(r => setTimeout(r, 30));
+  const entries = [];
+  for(const id of list){
+    const cv = storyCard(id);
+    const blob = await cardBlob(cv);
+    entries.push({name:(fullName(P(id)).replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-") || id) + ".png",
+                  data:new Uint8Array(await blob.arrayBuffer())});
+    if(entries.length % 8 === 0) await new Promise(r => setTimeout(r, 0));
+  }
+  const zip = await zipBlob(entries);
+  const ok = await offer(slug() + "-cards.zip", zip, "application/zip");
+  if(ok) toast(entries.length + " cards saved");
+}
+function cardsDialog(){
+  const sel = ui.sel && P(ui.sel);
+  const blood = Object.keys(S.people).filter(id => !INLAW[id]).length;
+  openModal(`
+    <div class="modal" style="width:min(100%,440px)">
+      <div class="modal-head"><div><h2>Story cards</h2>
+        <p>One square for one person — photograph, years, where they lived, and
+           who they belonged to. The shape a phone screen wants back.</p></div></div>
+      <div class="modal-body"><div class="rel">
+        ${sel ? `<button class="rel-item" style="width:100%;text-align:left" data-who="one">
+          <span class="txt"><span class="nm">${esc(fullName(P(ui.sel)))}</span>
+          <span class="meta">just this one, as a PNG</span></span></button>` : ""}
+        <button class="rel-item" style="width:100%;text-align:left" data-who="blood">
+          <span class="txt"><span class="nm">Everyone born into the family</span>
+          <span class="meta">${blood} cards, in one zip</span></span></button>
+        <button class="rel-item" style="width:100%;text-align:left" data-who="all">
+          <span class="txt"><span class="nm">Everyone, married-in as well</span>
+          <span class="meta">${Object.keys(S.people).length} cards, in one zip</span></span></button>
+      </div>
+      ${sel ? "" : `<div class="mono" style="font-size:10.5px;color:var(--ink-3);margin-top:12px">
+        Pick somebody on the chart first to make a single card.</div>`}
+      </div>
+      <div class="modal-foot"><span class="spring"></span><button class="btn" data-close>Cancel</button></div>
+    </div>`);
+  $("#modalMount").addEventListener("click", e => {
+    const b = e.target.closest("[data-who]"); if(!b) return;
+    closeModal(); exportCards(b.dataset.who);
+  });
+}
+function filmDialog(){
+  openModal(`
+    <div class="modal" style="width:min(100%,430px)">
+      <div class="modal-head"><div><h2>A short film of the family</h2>
+        <p>The tree filling in, one generation at a time, as a looping GIF —
+           which every phone and every chat app plays without being asked.</p></div></div>
+      <div class="modal-body"><div class="rel">
+        ${Object.keys(FILM_SIZES).map(k => `<button class="rel-item" style="width:100%;text-align:left" data-size="${k}">
+          <span class="txt"><span class="nm">${k === "medium" ? "Medium" : k === "small" ? "Small" : "Large"}</span>
+          <span class="meta">${esc(FILM_SIZES[k].label)}</span></span></button>`).join("")}
+      </div>
+      <div class="mono" style="font-size:10.5px;color:var(--ink-3);margin-top:12px;line-height:1.6">
+        It films whichever view is on screen — the register chart and the grown
+        tree both look well. A large family takes a few seconds to draw.
+      </div></div>
+      <div class="modal-foot"><span class="spring"></span><button class="btn" data-close>Cancel</button></div>
+    </div>`);
+  $("#modalMount").addEventListener("click", e => {
+    const b = e.target.closest("[data-size]"); if(!b) return;
+    closeModal(); exportFilm(b.dataset.size);
+  });
+}
+
 /* ── a living page ─────────────────────────────────────────
    A poster is for the wall of one house. This is the same family as one
    HTML file you can send to the family group: it opens on any phone, with
@@ -6129,6 +6542,8 @@ const PAID_THINGS = {
   png  : {name:"the image",         note:"at the resolution you chose"},
   svg  : {name:"the vector file",   note:"scales to any size at all"},
   page : {name:"the living page",   note:"the file you send to the family"},
+  film : {name:"the film",          note:"the family growing, as a looping GIF"},
+  cards: {name:"story cards",       note:"one square each, for sending and posting"},
   print: {name:"printing",          note:"straight to your own printer"}
 };
 /** Run `go`, or ask to be paid first. */
