@@ -1,0 +1,17 @@
+{
+  "name": "Heirloom — Family Tree",
+  "short_name": "Heirloom",
+  "description": "Build a family tree in your browser and print it as a poster. Nothing is uploaded.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#EBEBE3",
+  "theme_color": "#EBEBE3",
+  "categories": ["lifestyle", "productivity", "utilities"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

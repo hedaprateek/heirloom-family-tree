@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Heirloom Family Tree</title>
+<!-- The title carries what people actually type into a search box — free,
+     family tree, print, poster — and still reads like a sentence a person
+     wrote. Keep it under about 60 characters or the end is cut off. -->
+<title>Heirloom — Free Family Tree Maker You Can Print as a Poster</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Noto+Serif+Devanagari:wght@400;600&display=swap">
@@ -952,8 +955,17 @@ kbd{
 
 <!-- Social and canonical: absolute URLs, because a crawler
      resolves these from its own context, not the page's. -->
-<meta name="description" content="Build your family tree in the browser and print it as a poster, a book or a flex banner for the next gathering. Works offline, and nothing you type ever leaves your device.">
+<meta name="description" content="Free family tree maker. Build your tree in the browser, import a GEDCOM, and print it as a poster, a book or a flex banner. No account, nothing uploaded, and it writes Devanagari — Hindi and Marathi names come out right.">
 <link rel="canonical" href="https://hedaprateek.github.io/heirloom-family-tree/">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta name="author" content="Prateek Heda — Stunity Tech">
+<meta name="theme-color" content="#EBEBE3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14150F" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="site.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Heirloom">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <meta property="og:title" content="Heirloom — a family tree you can actually print">
 <meta property="og:description" content="Build your family tree in the browser and print it as a poster, a book or a flex banner for the next gathering. Works offline, and nothing you type ever leaves your device.">
 <meta property="og:type" content="website">
@@ -967,6 +979,62 @@ kbd{
 <meta name="twitter:title" content="Heirloom — a family tree you can actually print">
 <meta name="twitter:description" content="Build your family tree in the browser and print it as a poster, a book or a flex banner for the next gathering. Works offline, and nothing you type ever leaves your device.">
 <meta name="twitter:image" content="https://hedaprateek.github.io/heirloom-family-tree/og.png">
+
+<!-- What the thing is, in the vocabulary search engines parse rather than
+     read. Every claim here is one the app can keep: no rating is invented,
+     and the price is nothing because today it is nothing. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://hedaprateek.github.io/heirloom-family-tree/#app",
+      "name": "Heirloom",
+      "alternateName": "Heirloom Family Tree",
+      "applicationCategory": "LifestyleApplication",
+      "applicationSubCategory": "Genealogy",
+      "operatingSystem": "Any — runs in a web browser",
+      "browserRequirements": "Requires JavaScript",
+      "url": "https://hedaprateek.github.io/heirloom-family-tree/",
+      "image": "https://hedaprateek.github.io/heirloom-family-tree/og.png",
+      "screenshot": "https://hedaprateek.github.io/heirloom-family-tree/og.png",
+      "inLanguage": "en",
+      "description": "A free family tree maker that runs entirely in the browser. Build a tree, import or export GEDCOM, and print it as a poster, a book or a flex banner. Nothing is uploaded, and Devanagari names are set correctly.",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "INR", "availability": "https://schema.org/InStock" },
+      "featureList": [
+        "Family tree chart, grown tree, fan chart, timeline, register and in-law views",
+        "Print-ready PDF at exact paper size with trim marks and bleed",
+        "Posters from A4 to A0, tiled murals, and flex banners by the foot",
+        "GEDCOM import and export",
+        "Spreadsheet import and export",
+        "A living page: one HTML file that opens on any phone with no internet",
+        "A looping film of the family growing, and square story cards",
+        "Hindi and Marathi names in Devanagari, and dictation",
+        "Works offline — nothing you type is uploaded anywhere"
+      ],
+      "author": { "@id": "https://hedaprateek.github.io/heirloom-family-tree/#studio" },
+      "publisher": { "@id": "https://hedaprateek.github.io/heirloom-family-tree/#studio" }
+    },
+    {
+      "@type": "Organization",
+      "@id": "https://hedaprateek.github.io/heirloom-family-tree/#studio",
+      "name": "Stunity Tech",
+      "url": "https://stunity-tech.hedaprateek.workers.dev",
+      "logo": "https://hedaprateek.github.io/heirloom-family-tree/icon-512.png",
+      "founder": { "@type": "Person", "name": "Prateek Heda" },
+      "description": "Small tools, built one at a time."
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://hedaprateek.github.io/heirloom-family-tree/#site",
+      "url": "https://hedaprateek.github.io/heirloom-family-tree/",
+      "name": "Heirloom",
+      "publisher": { "@id": "https://hedaprateek.github.io/heirloom-family-tree/#studio" }
+    }
+  ]
+}
+</script>
 
 <!-- Cloudflare Web Analytics: cookieless, collects no personal data and
      sets nothing on the device, so it needs no consent banner. Every site
@@ -1094,6 +1162,29 @@ kbd{
 
   <!-- ── stage ───────────────────────────────────────────── -->
   <main class="stage" id="stage">
+    <!-- Without JavaScript there is no chart to draw, so say plainly what this
+         is instead of showing an empty page. A crawler reads it too, which is
+         the only honest way to have words on a page that is otherwise drawn. -->
+    <noscript>
+      <div style="max-width:44rem;margin:9vh auto;padding:0 6vw;font:400 16px/1.7 system-ui,sans-serif;color:#161E24">
+        <h1 style="font:600 30px/1.25 Georgia,serif;margin:0 0 12px">Heirloom — a free family tree maker</h1>
+        <p><strong>Heirloom needs JavaScript, because the whole thing runs on your own
+        device.</strong> There is no server to draw the chart for you — and that is the point:
+        nothing you type about your family is ever uploaded anywhere.</p>
+        <p>With it switched on you can build a family tree by hand or import a
+        <strong>GEDCOM</strong> from Ancestry, FamilySearch, MyHeritage or Gramps; look at it as a
+        register chart, a grown tree, a fan chart, a timeline, a numbered register or the
+        families you married into; and print it — a <strong>PDF at exactly the paper size you
+        chose</strong>, with the trim marks and bleed a press asks for, from A4 up to A0, tiled into
+        a mural, or a flex banner measured in feet.</p>
+        <p>It also writes a <strong>living page</strong> you can send on WhatsApp, a short
+        <strong>film</strong> of the family growing, and square <strong>story cards</strong> for
+        one person at a time. Hindi and Marathi names are set properly in Devanagari, and you can
+        speak the names instead of typing them.</p>
+        <p><a href="guide.html">Read how to make a family tree poster</a> ·
+           <a href="privacy.html">What is stored, and what never leaves your device</a></p>
+      </div>
+    </noscript>
     <div class="leaves" id="leaves" aria-hidden="true"></div>
     <svg id="chart" role="img" aria-label="Family tree chart"></svg>
 
@@ -1195,7 +1286,7 @@ kbd{
 
 <!-- QR codes for the share link and the printed poster. Optional: the app
      works without it, offline or if the CDN is blocked. -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script>
 "use strict";
 /* ═══════════════════════════════════════════════════════════
@@ -7068,7 +7159,7 @@ function fileDialog(){
           </div>
         </fieldset>
         <div class="mono" style="font-size:10px;color:var(--ink-3);margin-top:14px;text-align:center">
-          Heirloom · build ${BUILD} · Stunity Tech — by Prateek · <a href="privacy.html" style="color:inherit">Privacy</a>
+          Heirloom · build ${BUILD} · Stunity Tech — by Prateek · <a href="guide.html" style="color:inherit">Guide</a> · <a href="privacy.html" style="color:inherit">Privacy</a>
       </div>
       </div>
       <div class="modal-foot"><span class="spring"></span><button class="btn" data-close>Close</button></div>
@@ -8819,7 +8910,7 @@ function helpDialog(){
         </div>
       </fieldset>
       <div class="mono" style="font-size:10px;color:var(--ink-3);margin-top:16px;text-align:center">
-        Heirloom · build ${BUILD} · Stunity Tech — by Prateek · <a href="privacy.html" style="color:inherit">Privacy</a>
+        Heirloom · build ${BUILD} · Stunity Tech — by Prateek · <a href="guide.html" style="color:inherit">Guide</a> · <a href="privacy.html" style="color:inherit">Privacy</a>
       </div>
       <div class="mono" style="font-size:10px;color:var(--ink-3);margin-top:5px;text-align:center;line-height:1.6">
         Seeing something you thought was fixed? A phone can hold on to the old page.<br>

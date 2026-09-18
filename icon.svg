@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Heirloom">
+  <!-- the lineage sigil from the app's own toolbar: two joined, three descending -->
+  <rect width="64" height="64" rx="14" fill="#EBEBE3"/>
+  <g transform="translate(6.5,7.5) scale(2.32)" fill="none" stroke-linecap="round">
+    <circle cx="6.5" cy="4.5" r="2.6" stroke="#3D6A54" stroke-width="1.6"/>
+    <circle cx="15.5" cy="4.5" r="2.6" stroke="#3D6A54" stroke-width="1.6"/>
+    <path d="M9.1 4.5h3.8M11 4.5v5M3.5 17.5v-3.6a1 1 0 0 1 1-1h13a1 1 0 0 1 1 1v3.6M11 9.5v4.4"
+          stroke="#96671F" stroke-width="1.6"/>
+  </g>
+</svg>
