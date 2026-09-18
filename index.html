@@ -261,6 +261,38 @@ button{cursor:pointer;background:none;border:0;padding:0}
   -webkit-mask-image:radial-gradient(ellipse 90% 80% at 50% 45%,#000 35%,transparent 100%);
           mask-image:radial-gradient(ellipse 90% 80% at 50% 45%,#000 35%,transparent 100%);
 }
+/* ── leaves ────────────────────────────────────────────────
+   A family chart is a still thing, and a still thing on a screen looks
+   like a document. A few leaves coming down behind it — slowly, the way
+   they do on a windless afternoon — make the page feel alive and, since
+   they drift from the elders at the top towards the children below, they
+   say the thing the chart is about. They sit behind everything, catch no
+   clicks, never print, and stop entirely if the reader asks for less
+   motion or turns them off. */
+.leaves{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+.leaves i{
+  position:absolute;top:-8%;left:var(--x);display:block;
+  animation:leaf-fall var(--d) linear var(--delay) infinite;
+  will-change:transform;
+}
+.leaves i svg{
+  display:block;width:var(--s);height:var(--s);color:var(--leaf);opacity:var(--o);
+  animation:leaf-sway calc(var(--d) / 4.5) ease-in-out var(--delay) infinite;
+  transform-origin:50% 50%;
+}
+@keyframes leaf-fall{
+  from{transform:translate3d(0,0,0)}
+  to  {transform:translate3d(var(--dx),118vh,0)}
+}
+@keyframes leaf-sway{
+  0%  {transform:translateX(-11px) rotate(-18deg)}
+  50% {transform:translateX(11px)  rotate(24deg)}
+  100%{transform:translateX(-11px) rotate(-18deg)}
+}
+@media (prefers-reduced-motion:reduce){ .leaves{display:none} }
+@media print{ .leaves{display:none} }
+/* no z-index here on purpose: the leaves sit before it in the document and
+   everything after it — the docks, the flags — must stay clickable above it */
 #chart{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
 #chart.panning{cursor:grabbing}
 
@@ -316,6 +348,32 @@ button{cursor:pointer;background:none;border:0;padding:0}
 .legend b{font-weight:500;color:var(--brass);font-size:13px;line-height:1}
 .legend span{display:flex;align-items:center;gap:5px}
 
+/* the three shapes of the tree, offered rather than hidden */
+.shapes{
+  position:absolute;left:50%;top:12px;transform:translateX(-50%);z-index:3;
+  display:flex;align-items:center;gap:3px;padding:4px 4px 4px 12px;
+  background:var(--panel);border:1px solid var(--line);border-radius:999px;box-shadow:var(--lift);
+}
+.shapes[hidden]{display:none}
+.shapes-lab{
+  font-family:var(--f-mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-3);padding-right:6px;
+}
+.shapes button{
+  display:inline-flex;align-items:center;gap:6px;padding:5px 12px 5px 9px;border-radius:999px;
+  font-size:12.5px;font-weight:500;color:var(--ink-2);white-space:nowrap;
+}
+.shapes button svg{opacity:.8}
+.shapes button:hover{background:var(--panel-2);color:var(--ink)}
+.shapes button[aria-pressed="true"]{background:var(--accent-tint);color:var(--accent-2)}
+.shapes button[aria-pressed="true"] svg{opacity:1}
+/* on a phone the words go and the pictures carry it */
+@media (max-width:760px){
+  .shapes{padding-left:8px;gap:2px}
+  .shapes-lab{display:none}
+  .shapes button span{display:none}
+  .shapes button{padding:7px 9px}
+}
 .sample-flag{
   position:absolute;left:50%;top:12px;transform:translateX(-50%);
   display:flex;align-items:center;gap:10px;
@@ -585,13 +643,16 @@ kbd{
     from{opacity:0;transform:translate(var(--x,0),var(--y,0)) translateY(11px) scale(.978)}
     to  {opacity:1;transform:translate(var(--x,0),var(--y,0))}
   }
-  @keyframes hl-breathe{from{opacity:0;transform:scale(.988)}to{opacity:1;transform:none}}
+  /* opacity only, and deliberately: #vp carries the pan and zoom in its own
+     transform attribute, and a CSS transform here would throw it away for as
+     long as the animation ran — the whole view drawn in the wrong place */
+  @keyframes hl-breathe{from{opacity:0}to{opacity:1}}
   #chart.growing .link,#chart.growing .ulink,#chart.growing .uband,
   #chart.growing .uglyph,#chart.growing .uyear,
   #chart.growing .genrule,#chart.growing .genlab{animation:hl-draw .5s ease both}
   #chart.growing .node{animation:hl-settle .52s cubic-bezier(.2,.8,.3,1) both;
     animation-delay:calc(.1s + var(--d,0) * .085s)}
-  #chart.settling #vp{animation:hl-breathe .5s ease both;transform-origin:center}
+  #chart.settling #vp{animation:hl-breathe .5s ease both}
 }
 #chart .link{fill:none;stroke:var(--line-2);stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
 #chart .link.dashed{stroke-dasharray:5 4}
@@ -1033,6 +1094,7 @@ kbd{
 
   <!-- ── stage ───────────────────────────────────────────── -->
   <main class="stage" id="stage">
+    <div class="leaves" id="leaves" aria-hidden="true"></div>
     <svg id="chart" role="img" aria-label="Family tree chart"></svg>
 
     <div class="stage-empty" id="stageEmpty" hidden>
@@ -1052,6 +1114,21 @@ kbd{
           <button class="btn ghost sm" id="emptySample">See the sample family</button>
         </div>
       </div>
+    </div>
+
+    <!-- the tree has three shapes, and nobody was ever going to find them by
+         clicking the same button twice -->
+    <div class="shapes" id="shapeBar" hidden>
+      <span class="shapes-lab">Shape</span>
+      <button data-shape="canopy" aria-pressed="true">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M8 14.6v-5"/><path d="M8 9.6 4.6 6.4M8 9.6l3.4-3.2"/><circle cx="8" cy="4.2" r="3.1"/><circle cx="3.9" cy="6.1" r="1.9"/><circle cx="12.1" cy="6.1" r="1.9"/></svg>
+        <span>Grown</span></button>
+      <button data-shape="rows" aria-pressed="false">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><rect x="6.1" y="1.8" width="3.8" height="2.4" rx=".7"/><rect x="1.9" y="6.8" width="3.8" height="2.4" rx=".7"/><rect x="10.3" y="6.8" width="3.8" height="2.4" rx=".7"/><rect x="6.1" y="11.8" width="3.8" height="2.4" rx=".7"/><path d="M8 4.2v2.6M3.8 9.2v1.2h8.4V9.2M8 10.4v1.4"/></svg>
+        <span>Generations</span></button>
+      <button data-shape="wide" aria-pressed="false">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><rect x="1.6" y="6.2" width="3.4" height="3.6" rx=".7"/><rect x="11" y="2" width="3.4" height="3" rx=".7"/><rect x="11" y="6.5" width="3.4" height="3" rx=".7"/><rect x="11" y="11" width="3.4" height="3" rx=".7"/><path d="M5 8h3v-4.5h3M8 8h3M8 8v4.5h3"/></svg>
+        <span>On its side</span></button>
     </div>
 
     <div class="sample-flag" id="sampleFlag" hidden>
@@ -1074,6 +1151,7 @@ kbd{
       <button id="tPhoto" title="Card detail" aria-label="Card detail"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2.2" y="3.5" width="11.6" height="9" rx="1.4"/><circle cx="5.6" cy="7" r="1.3"/><path d="M2.6 11.4 6 8.9l2.2 1.7M9.4 6.5h3M9.4 9h3" stroke-linecap="round"/></svg></button>
       <button id="tGens" title="Generation bands" aria-pressed="true" aria-label="Generation bands"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12" stroke-dasharray="1 3"/></svg></button>
       <button id="tDates" title="Show full dates" aria-pressed="false" aria-label="Show full dates"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.2" y="3.4" width="11.6" height="10.4" rx="1.5"/><path d="M2.2 6.6h11.6M5.4 1.8v2.4M10.6 1.8v2.4" stroke-linecap="round"/><path d="M5 9.4h2M9 9.4h2M5 11.6h2" stroke-linecap="round"/></svg></button>
+      <button id="tLeaves" title="Falling leaves" aria-pressed="true" aria-label="Falling leaves"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12.8 2.6c.9 4.6-1 7.6-3.6 8.7-2 .8-4-.1-4.5-1.9-.6-2.2 1-3.8 3.3-4.4 2-.5 3.8-1.2 4.8-2.4z"/><path d="M9.6 5.6C7.4 7 5.6 9.4 4.6 13.4"/></svg></button>
       <button id="tInlaw" title="Play down people who married in" aria-pressed="true" aria-label="Play down people who married in"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="5.6" cy="6" r="2.5"/><path d="M1.6 13.4a4 4 0 0 1 8 0" stroke-linecap="round"/><circle cx="11.6" cy="6" r="2.1" stroke-dasharray="1.6 1.7"/><path d="M8.9 13.4a3.4 3.4 0 0 1 5.5-2.7" stroke-linecap="round" stroke-dasharray="1.6 1.7"/></svg></button>
     </div>
 
@@ -1241,7 +1319,7 @@ let S = blankDoc();
 let ui = {
   view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
   softInlaw:true, dates:"year", treeStyle:"canopy", railTab:"people", moreOpen:false, textSize:1,
-  z:1, tx:0, ty:0, query:"", isSample:false, dirty:false
+  z:1, tx:0, ty:0, query:"", isSample:false, dirty:false, leaves:true
 };
 let LAY = null;                 // last computed layout
 let INLAW = {};                 // pid -> true for people who married in
@@ -3606,6 +3684,7 @@ function render(){
   $("#focusName").textContent = ui.focus && P(ui.focus) ? fullName(P(ui.focus)) : "Whole family";
   $("#sampleFlag").hidden = !ui.isSample;
   $("#shareFlag").hidden = !ORIGIN;
+  placeShapes();
   if(ORIGIN){
     const n = addedSince();
     $("#shareFlagText").textContent =
@@ -7697,7 +7776,8 @@ function save(){
       localStorage.setItem(KEY, JSON.stringify({data:S, ui:{
         view:ui.view, mode:ui.mode, focus:ui.focus, style:ui.style,
         gens:ui.gens, softInlaw:ui.softInlaw, dates:ui.dates,
-        treeStyle:ui.treeStyle, textSize:ui.textSize, isSample:ui.isSample
+        treeStyle:ui.treeStyle, textSize:ui.textSize, isSample:ui.isSample,
+        leaves:ui.leaves
       }, origin:ORIGIN}));
     } catch(e){
       toast("Browser storage is full — save a family file", true);
@@ -7851,10 +7931,24 @@ function setView(v){
   $("#tGens").style.opacity  = banded ? "" : ".35";
   $(".legend").style.display = v === "chart" ? "" : "none";
   $("#vTree").title = v === "tree"
-    ? (ui.treeStyle === "canopy" ? "Tree — click again for the generational layout"
-                                 : "Tree — click again for the grown tree")
-    : "Tree — a grown tree, or tidy generations";
+    ? "Tree — pick its shape above the chart"
+    : "Tree — grown, by generation, or on its side";
+  showShapes();
   save();
+}
+/** The shape bar belongs to the tree, and only to the tree. */
+function showShapes(){
+  const bar = $("#shapeBar"); if(!bar) return;
+  bar.hidden = ui.view !== "tree";
+  $$("#shapeBar [data-shape]").forEach(b =>
+    b.setAttribute("aria-pressed", b.dataset.shape === ui.treeStyle));
+  placeShapes();
+}
+/** Step it below the sample or shared banner rather than under it. */
+function placeShapes(){
+  const bar = $("#shapeBar"); if(!bar || bar.hidden) return;
+  const flag = (!$("#sampleFlag").hidden || !$("#shareFlag").hidden);
+  bar.style.top = flag ? "54px" : "12px";
 }
 function setMode(m){
   if(ui.mode !== m) arrive();
@@ -7866,8 +7960,55 @@ function setMode(m){
   }
   save();
 }
+/* ── the leaves coming down ────────────────────────────────
+   Two shapes of leaf and a few tints, each one given its own speed, size
+   and drift so no two fall together and the pattern never repeats itself
+   at a glance. Negative delays start them mid-air, so the first moment
+   on screen is already a quiet afternoon rather than a starting gun. */
+const LEAF_ART = [
+  `<path d="M12.6 2.4c1 4.8-1 8-3.7 9.1-2.1.9-4.2-.1-4.8-2-.6-2.3 1.1-4 3.5-4.6 2.1-.5 4-1.3 5-2.5z" fill="currentColor" opacity=".9"/><path d="M9.3 5.5C7 7 5.1 9.5 4.1 13.7" stroke="currentColor" stroke-width="1" fill="none" stroke-linecap="round" opacity=".55"/>`,
+  `<path d="M8 1.8c2.6 2 4 4.2 4 6.4 0 2.5-1.8 4.3-4 4.3S4 10.7 4 8.2c0-2.2 1.4-4.4 4-6.4z" fill="currentColor" opacity=".85"/><path d="M8 4.2v9.8" stroke="currentColor" stroke-width="1" fill="none" stroke-linecap="round" opacity=".5"/>`
+];
+const LEAF_TINT = ["var(--accent)", "var(--brass)", "var(--accent-2)", "var(--bark, var(--brass))"];
+function leafFall(){
+  const host = $("#leaves"); if(!host) return;
+  host.innerHTML = "";
+  if(!ui.leaves) return;
+  if(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const n = innerWidth < 760 ? 7 : 13;
+  const R = (a, b) => a + Math.random() * (b - a);
+  let html = "";
+  for(let i = 0; i < n; i++){
+    const art = LEAF_ART[i % LEAF_ART.length];
+    html += `<i style="--x:${R(-2, 98).toFixed(1)}%;--s:${R(11, 21).toFixed(0)}px;`
+          + `--d:${R(17, 34).toFixed(1)}s;--delay:-${R(0, 34).toFixed(1)}s;`
+          + `--dx:${R(-90, 90).toFixed(0)}px;--o:${R(.1, .26).toFixed(2)};`
+          + `--leaf:${LEAF_TINT[i % LEAF_TINT.length]}">`
+          + `<svg viewBox="0 0 16 16">${art}</svg></i>`;
+  }
+  host.innerHTML = html;
+}
+function setLeaves(on){
+  ui.leaves = !!on;
+  $("#tLeaves").setAttribute("aria-pressed", ui.leaves);
+  leafFall();
+  save();
+}
+$("#tLeaves").addEventListener("click", () => {
+  setLeaves(!ui.leaves);
+  toast(ui.leaves ? "Leaves falling" : "Leaves off");
+});
+
 const TREE_SHAPE = {canopy:"Tree — grown", rows:"Tree — generations", wide:"Tree — on its side"};
 const TREE_ORDER = ["canopy", "rows", "wide"];
+$$("#shapeBar [data-shape]").forEach(b => b.addEventListener("click", () => {
+  const s = b.dataset.shape;
+  if(s === ui.treeStyle && ui.view === "tree") return;
+  ui.treeStyle = s;
+  arrive();
+  setView("tree"); render(); fitView();
+  toast(TREE_SHAPE[s]);
+}));
 for(const k in VIEWS)
   $("#" + VIEWS[k]).addEventListener("click", () => {
     /* clicking Tree while it is already showing switches between its two shapes */
@@ -8303,6 +8444,8 @@ window.addEventListener("beforeunload", e => {
   if(ui.dirty && Object.keys(S.people).length > 2){ e.preventDefault(); e.returnValue = ""; }
 });
 /** The bar grows a second row on a narrow screen; the drawers hang off it. */
+let leafTimer = null;
+function reLeaf(){ clearTimeout(leafTimer); leafTimer = setTimeout(leafFall, 400); }
 function syncBarHeight(){
   const h = Math.round($(".bar").getBoundingClientRect().height);
   if(h) document.documentElement.style.setProperty("--bar-h", h + "px");
@@ -8310,6 +8453,7 @@ function syncBarHeight(){
 let rt = null;
 window.addEventListener("resize", () => {
   syncBarHeight();
+  reLeaf();                       // a narrower window wants fewer of them
   clearTimeout(rt); rt = setTimeout(applyTransform, 120);
 });
 
@@ -8425,6 +8569,10 @@ function loadSample(){
   }
   $("#tGens").setAttribute("aria-pressed", !!ui.gens);
   $("#tInlaw").setAttribute("aria-pressed", !!ui.softInlaw);
+  if(ui.leaves == null) ui.leaves = true;
+  $("#tLeaves").setAttribute("aria-pressed", !!ui.leaves);
+  leafFall();
+  showShapes();
   $("#tDates").setAttribute("aria-pressed", ui.dates === "full");
   applyTextSize();
 
