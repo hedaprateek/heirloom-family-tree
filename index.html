@@ -1205,7 +1205,32 @@ const PRINT_SHOP = {
     {k:"frame",label:"Framed print",    note:"A3 or A2, wood frame",        price:null}
   ]
 };
-const BUILD = "2026-09-16a";   // shown in Help, so a stale cached copy is obvious
+/* ── paying for it ─────────────────────────────────────────
+   Building the tree is free and stays free, and so is getting your own
+   names back out — the family file, the spreadsheet and the GEDCOM are
+   never locked. Holding somebody's own grandmother to ransom is not a
+   business. What is paid for is the finished thing: the press-ready PDF,
+   the high-resolution image, the vector file, the living page, and
+   printing it out.
+
+   Set keyId to a Razorpay key and Checkout opens in the page. Leave it
+   empty and it falls back to paying by UPI and typing the reference in,
+   which needs no account anywhere and works today. Neither can truly be
+   verified without a server of your own: a determined developer can open
+   the console and let themselves through. That is a deliberate trade —
+   the alternative is a backend, and this app has never needed one.
+   ──────────────────────────────────────────────────────── */
+const PAY = {
+  enabled : true,
+  keyId   : "",                 // "rzp_live_…" — Razorpay Checkout, once you have one
+  upi     : "",                 // "prateek@okicici" — the fallback, and the honest one
+  price   : 199,                // rupees, once per family
+  currency: "INR",
+  printFree: false,             // true lets people print at home without paying
+  contact : PRINT_SHOP.whatsapp
+};
+const PAID_KEY = KEY + ".paid";
+const BUILD = "2026-09-18a";   // shown in Help, so a stale cached copy is obvious
 let S = blankDoc();
 let ui = {
   view:"chart", mode:"desc", focus:null, sel:null, style:"standard", gens:true,
@@ -4803,6 +4828,7 @@ function printDialog(){
               <button class="btn sm" id="pSVG">SVG</button>
               <button class="btn sm" id="pXLSX">Excel</button>
               <button class="btn sm" id="pCSV">CSV</button>
+              <button class="btn sm" id="pGED">GEDCOM</button>
               <button class="btn sm" id="pJSON">Family file</button>
             </div>
           </fieldset>
@@ -4814,6 +4840,11 @@ function printDialog(){
         printer; if you save a PDF from that dialog instead, set margins to <b>None</b> and turn
         <b>headers and footers off</b>, or it comes out shrunk.
       </div>
+      ${PAY.enabled && !isPaid() ? `<div class="notice" style="background:var(--brass-tint);border-color:var(--brass);color:var(--brass)">
+        <b>₹${PAY.price} once for this family</b> covers the PDF, the image, the vector file,
+        the living page and printing — however many times you make them, however big.
+        Your family file, spreadsheet and GEDCOM stay free.
+      </div>` : ""}
       </div>
       <div class="modal-foot">
         ${PRINT_SHOP.enabled ? `<button class="btn" id="pShop">Get it printed</button>` : ""}
@@ -4908,13 +4939,14 @@ function printDialog(){
     closeModal(); printDialog();
     toast(PRESETS[b.dataset.preset].label);
   }));
-  $("#pGo").addEventListener("click", () => { read(); doPrint(); });
-  $("#pPDF").addEventListener("click", () => { read(); exportPDF(); });
-  $("#pPage").addEventListener("click", () => { read(); exportLiving(true); });
-  $("#pPNG").addEventListener("click", () => { read(); exportPNG(); });
-  $("#pSVG").addEventListener("click", () => { read(); exportSVG(); });
+  $("#pGo").addEventListener("click", () => { read(); gate("print", doPrint); });
+  $("#pPDF").addEventListener("click", () => { read(); gate("pdf", exportPDF); });
+  $("#pPage").addEventListener("click", () => { read(); gate("page", () => exportLiving(true)); });
+  $("#pPNG").addEventListener("click", () => { read(); gate("png", exportPNG); });
+  $("#pSVG").addEventListener("click", () => { read(); gate("svg", exportSVG); });
   $("#pXLSX").addEventListener("click", () => { read(); exportXLSX(); });
   $("#pCSV").addEventListener("click", () => { read(); exportCSV(); });
+  $("#pGED").addEventListener("click", () => { read(); exportGEDCOM(); });
   $("#pJSON").addEventListener("click", () => { read(); exportJSON(); });
   if(PRINT_SHOP.enabled) $("#pShop").addEventListener("click", () => { read(); printShopDialog(); });
   read();
@@ -5035,8 +5067,11 @@ function planFlex(){
 }
 
 function paintPreview(){
-  const plan = planSheets();
+  /* the preview can be asked for a beat after the dialog it lives in has gone —
+     another modal opened over it, or it was simply closed */
   const mount = $("#prevMount");
+  if(!mount) return;
+  const plan = planSheets();
   const maxW = 268, maxH = 200;
   const gw = plan.pageW * plan.cols, gh = plan.pageH * plan.rows;
   const k = Math.min(maxW / gw, maxH / gh);
@@ -5962,6 +5997,455 @@ setTimeout(() => { const h = $("#hint"); if(h){ h.style.opacity = 0; setTimeout(
   }
 }
 
+/* ── the gate ──────────────────────────────────────────────
+   One payment covers one family, for good, on this device. The family
+   carries its own id so the tree stays unlocked as it grows, and so a
+   backup restored next year is still paid for.
+   ──────────────────────────────────────────────────────── */
+function docId(){
+  if(!S.meta.docId){
+    S.meta.docId = "d" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    save();
+  }
+  return S.meta.docId;
+}
+function paidList(){
+  try { return JSON.parse(localStorage.getItem(PAID_KEY) || "[]"); } catch(e){ return []; }
+}
+function isPaid(){
+  if(!PAY.enabled) return true;
+  return paidList().some(r => r.doc === (S.meta.docId || ""));
+}
+function markPaid(ref, how){
+  const all = paidList();
+  all.push({doc:docId(), ref:ref || "", how:how || "", on:new Date().toISOString()});
+  try { localStorage.setItem(PAID_KEY, JSON.stringify(all)); } catch(e){}
+  render();
+}
+/** Everything the gate stands in front of, in the words the dialog uses. */
+const PAID_THINGS = {
+  pdf  : {name:"the PDF",           note:"exact paper size, trim marks, ready for a press"},
+  png  : {name:"the image",         note:"at the resolution you chose"},
+  svg  : {name:"the vector file",   note:"scales to any size at all"},
+  page : {name:"the living page",   note:"the file you send to the family"},
+  print: {name:"printing",          note:"straight to your own printer"}
+};
+/** Run `go`, or ask to be paid first. */
+function gate(what, go){
+  if(!PAY.enabled || isPaid() || (what === "print" && PAY.printFree)) return go();
+  payDialog(what, go);
+}
+function payDialog(what, go){
+  const it = PAID_THINGS[what] || PAID_THINGS.pdf;
+  const money = "₹" + PAY.price;
+  const title = S.meta.title || guessTitle();
+  const upiLink = PAY.upi
+    ? "upi://pay?pa=" + encodeURIComponent(PAY.upi) + "&pn=" + encodeURIComponent("Heirloom")
+      + "&am=" + PAY.price + "&cu=INR&tn=" + encodeURIComponent("Heirloom " + title)
+    : "";
+  openModal(`
+    <div class="modal" style="width:min(100%,470px)">
+      <div class="modal-head"><div style="flex:1">
+        <h2>${money} for ${esc(title)}</h2>
+        <p>One payment, this family, for good — ${esc(it.name)} and everything else
+           that comes out of it. Not per sheet, not a subscription.</p></div>
+        <button class="btn icon ghost" data-close aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+      </div>
+      <div class="modal-body">
+        <div class="rel">
+          ${Object.keys(PAID_THINGS).map(k => `<div class="rel-item">
+            <span class="txt"><span class="nm">${esc(PAID_THINGS[k].name.replace(/^the /, ""))
+              .replace(/^./, c => c.toUpperCase())}</span>
+            <span class="meta">${esc(PAID_THINGS[k].note)}</span></span>
+            <span class="kind-chip">included</span></div>`).join("")}
+        </div>
+        <div class="notice" style="background:var(--accent-tint);border-color:var(--accent-ring);color:var(--accent-2)">
+          <b>Your family is not what you are paying for.</b> The names, dates and
+          stories are yours already — <b>Save family file</b>, the spreadsheet and
+          the GEDCOM are free and always will be, paid or not.
+        </div>
+        ${PAY.keyId ? "" : PAY.upi ? `
+        <fieldset style="margin-top:14px"><legend>Pay by UPI</legend>
+          <div class="mono" style="font-size:12px;line-height:1.9">
+            <b>${esc(PAY.upi)}</b> &nbsp;·&nbsp; ${money}<br>
+            <span style="color:var(--ink-3)">Any UPI app. Put the family name in the note.</span>
+          </div>
+          <div style="display:flex;gap:7px;margin-top:9px;flex-wrap:wrap">
+            <a class="btn sm primary" href="${esc(upiLink)}">Open a UPI app</a>
+            <button class="btn sm" id="payQR">Show a QR</button>
+          </div>
+          <div id="payQRBox" style="display:flex;justify-content:center;padding:10px 0 0"></div>
+          <label class="f" style="margin-top:12px"><span>Then type the UPI reference number</span>
+            <input id="payRef" placeholder="e.g. 431203912345" autocomplete="off" inputmode="numeric"></label>
+          <div class="hint mono" style="font-size:10.5px;color:var(--ink-3);margin-top:5px">
+            It unlocks straight away. We check payments by hand afterwards.
+          </div>
+        </fieldset>` : `
+        <div class="notice"><b>Payment is not set up yet.</b> Put a UPI id or a Razorpay
+        key into <span class="mono">PAY</span> near the top of the file.</div>`}
+      </div>
+      <div class="modal-foot">
+        <button class="btn" id="payHelp">I have paid already</button>
+        <span class="spring"></span>
+        <button class="btn" data-close>Not now</button>
+        ${PAY.keyId ? `<button class="btn primary" id="payGo">Pay ${money}</button>`
+                    : PAY.upi ? `<button class="btn primary" id="payDone">Unlock</button>` : ""}
+      </div>
+    </div>`);
+
+  const unlocked = (ref, how) => {
+    markPaid(ref, how);
+    closeModal();
+    toast("Thank you — " + esc(title) + " is unlocked");
+    setTimeout(go, 120);
+  };
+  if($("#payQR")) $("#payQR").addEventListener("click", () => {
+    const q = qrShape(upiLink, 4);
+    $("#payQRBox").innerHTML = q
+      ? `<svg width="150" height="150" viewBox="0 0 ${q.size} ${q.size}">
+           <rect width="${q.size}" height="${q.size}" fill="#fff"/><path d="${q.d}" fill="#141C22"/></svg>`
+      : `<span class="mono" style="font-size:11px;color:var(--ink-3)">No QR without the internet — the id above still works.</span>`;
+  });
+  if($("#payDone")) $("#payDone").addEventListener("click", () => {
+    const ref = ($("#payRef").value || "").trim();
+    if(ref.length < 6) return toast("Type the reference from your UPI app", true);
+    unlocked(ref, "upi");
+  });
+  if($("#payGo")) $("#payGo").addEventListener("click", () => {
+    razorpay(() => toast("Payment could not start — try UPI instead", true),
+             id => unlocked(id, "razorpay"));
+  });
+  $("#payHelp").addEventListener("click", () => {
+    closeModal();
+    const msg = "I have paid for Heirloom — " + title + ". Please unlock my copy.";
+    if(PAY.contact) window.open("https://wa.me/" + PAY.contact + "?text=" + encodeURIComponent(msg), "_blank", "noopener");
+    else toast("Get in touch and we will sort it out");
+  });
+}
+/** Razorpay's own dialog, loaded only if someone actually pays. */
+function razorpay(fail, done){
+  const start = () => {
+    try {
+      const r = new Rzp({
+        key: PAY.keyId, amount: PAY.price * 100, currency: PAY.currency,
+        name: "Heirloom", description: S.meta.title || guessTitle(),
+        notes: {family: S.meta.title || "", doc: docId()},
+        theme: {color: "#3D6A54"},
+        handler: res => done(res.razorpay_payment_id || "paid")
+      });
+      r.open();
+    } catch(e){ fail(); }
+  };
+  if(typeof Razorpay === "function"){ window.Rzp = Razorpay; return start(); }
+  const s = document.createElement("script");
+  s.src = "https://checkout.razorpay.com/v1/checkout.js";
+  s.onload = () => { window.Rzp = window.Razorpay; start(); };
+  s.onerror = fail;
+  document.head.appendChild(s);
+}
+
+/* ── GEDCOM ────────────────────────────────────────────────
+   The one format the rest of genealogy agrees on. Someone with four
+   hundred people on Ancestry or FamilySearch has no business retyping
+   them, and someone who builds a family here should be able to take it
+   anywhere. It is an old format — one line per fact, levels by number —
+   and both halves are written out below.
+
+   Photographs stay behind: GEDCOM points at image files on a disk that
+   the person receiving it does not have, so sending them is worse than
+   honest silence. Everything else travels, adoption included.
+   ──────────────────────────────────────────────────────── */
+const GED_MON = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+
+/** Our free-typed date, as GEDCOM says a date should look. */
+function gedDate(v){
+  const d = parseDate(v);
+  if(!d) return String(v || "").trim().toUpperCase();
+  const core = (d.d ? d.d + " " : "") + (d.m ? GED_MON[d.m - 1] + " " : "") + d.y;
+  return (d.approx ? "ABT " : "") + core;
+}
+/** …and back again, in the words the rest of the app uses. */
+function unGedDate(v){
+  let s = String(v || "").trim();
+  if(!s) return "";
+  let pre = "";
+  s = s.replace(/^(ABT|ABOUT|EST|CAL)\b\.?\s*/i, () => { pre = "c. "; return ""; })
+       .replace(/^(BEF|AFT)\b\.?\s*/i, (m, w) => { pre = w.toUpperCase() === "BEF" ? "before " : "after "; return ""; })
+       .replace(/^BET\b\.?\s*/i, () => { pre = ""; return ""; })
+       .replace(/\s+AND\s+.*$/i, "");                      // a range keeps its first date
+  const m = s.match(/^(\d{1,2}\s+)?([A-Z]{3})\s+(\d{3,4})$/i);
+  if(m){
+    const mi = GED_MON.indexOf(m[2].toUpperCase());
+    if(mi >= 0) return pre + (m[1] ? m[1].trim() + " " : "") + MON_SHORT[mi] + " " + m[3];
+  }
+  return pre + s;
+}
+/** GEDCOM lines run to 255 characters, so long text is continued. */
+function gedText(level, tag, text){
+  const out = [];
+  String(text).split(/\r?\n/).forEach((line, i) => {
+    let rest = line, first = true;
+    do {
+      const take = rest.slice(0, 200);
+      rest = rest.slice(200);
+      out.push(level + " " + (first ? (i === 0 ? tag : "CONT") : "CONC") + " " + take);
+      first = false;
+    } while(rest.length);
+  });
+  return out;
+}
+function exportGED(){
+  const L = [], idx = buildIndex();
+  const iref = {}, fref = {};
+  let i = 0, f = 0;
+  for(const id in S.people) iref[id] = "@I" + (++i) + "@";
+  for(const uid in S.unions) fref[uid] = "@F" + (++f) + "@";
+  const d = new Date(), stamp = d.getDate() + " " + GED_MON[d.getMonth()] + " " + d.getFullYear();
+
+  L.push("0 HEAD", "1 SOUR HEIRLOOM", "2 NAME Heirloom", "2 VERS 1", "2 CORP " + CREDIT,
+         "1 DATE " + stamp, "1 GEDC", "2 VERS 5.5.1", "2 FORM LINEAGE-LINKED", "1 CHAR UTF-8");
+  if(S.meta && S.meta.title) L.push("1 NOTE " + S.meta.title);
+
+  for(const id in S.people){
+    const p = P(id), info = idx[id];
+    L.push("0 " + iref[id] + " INDI");
+    /* genealogy writes the surname between slashes; a woman's birth name is
+       the one the rest of the world files her under, so it leads when we have it */
+    const sur = p.maiden || p.last || "";
+    L.push("1 NAME " + (p.first || "").trim() + " /" + sur.trim() + "/");
+    if(p.first) L.push("2 GIVN " + p.first.trim());
+    if(sur) L.push("2 SURN " + sur.trim());
+    if(p.maiden && p.last && p.last !== p.maiden){
+      L.push("1 NAME " + (p.first || "").trim() + " /" + p.last.trim() + "/", "2 TYPE married");
+    }
+    if(p.sex === "F" || p.sex === "M") L.push("1 SEX " + p.sex);
+    if(p.birth || p.place){
+      L.push("1 BIRT");
+      if(p.birth) L.push("2 DATE " + gedDate(p.birth));
+      if(p.place) L.push("2 PLAC " + p.place);
+    }
+    if(p.death || p.dead){
+      L.push("1 DEAT" + (p.death ? "" : " Y"));
+      if(p.death) L.push("2 DATE " + gedDate(p.death));
+    }
+    if(p.occupation) L.push("1 OCCU " + p.occupation);
+    if(p.notes) gedText(1, "NOTE", p.notes).forEach(x => L.push(x));
+    parentUnionsOf(id).forEach(uid => {
+      L.push("1 FAMC " + fref[uid]);
+      const k = childKind(uid, id);
+      /* PEDI only knows adopted, birth, foster and sealing — a step-child
+         travels under our own tag, which every reader simply skips */
+      if(k === "adopted" || k === "foster") L.push("2 PEDI " + k);
+      else if(k !== "birth") L.push("2 _KIND " + k);
+    });
+    (info.unions || []).forEach(uid => L.push("1 FAMS " + fref[uid]));
+  }
+
+  for(const uid in S.unions){
+    const u = U(uid);
+    L.push("0 " + fref[uid] + " FAM");
+    const a = u.a && P(u.a) ? u.a : null, b = u.b && P(u.b) ? u.b : null;
+    /* HUSB and WIFE are the only slots GEDCOM has; sex decides when it is known */
+    let husb = null, wife = null;
+    for(const x of [a, b]){
+      if(!x) continue;
+      const s = P(x).sex;
+      if(s === "M" && !husb) husb = x; else if(s === "F" && !wife) wife = x;
+      else if(!husb) husb = x; else if(!wife) wife = x;
+    }
+    if(husb) L.push("1 HUSB " + iref[husb]);
+    if(wife) L.push("1 WIFE " + iref[wife]);
+    (u.children || []).filter(k => S.people[k]).forEach(k => L.push("1 CHIL " + iref[k]));
+    if(u.status === "married" || u.date || u.place){
+      L.push("1 MARR");
+      if(u.date) L.push("2 DATE " + gedDate(u.date));
+      if(u.place) L.push("2 PLAC " + u.place);
+    }
+    if(u.status === "partners") L.push("1 _UNION partners");
+    if(u.divorced) L.push("1 DIV Y");
+  }
+  L.push("0 TRLR", "");
+  return L.join("\n");
+}
+async function exportGEDCOM(){
+  const ok = await offer(slug() + ".ged", exportGED(), "text/plain");
+  if(ok) toast(Object.keys(S.people).length + " people saved as GEDCOM · photos stay here");
+}
+
+/** Read the old format into a family, keeping whatever it can. */
+function parseGED(text){
+  const people = {}, unions = {}, warn = [];
+  const rows = [];
+  String(text).replace(/^﻿/, "").split(/\r?\n/).forEach(line => {
+    /* exactly one space separates a tag from its value — the next one along
+       belongs to the text, and a CONC often continues in the middle of a word */
+    const m = line.match(/^\s*(\d+)\s+(?:(@[^@]+@)\s+)?(\w+)(?: (.*))?$/);
+    if(m) rows.push({lv:+m[1], id:m[2] || "", tag:m[3], val:(m[4] || "").replace(/\s+$/, "")});
+  });
+  if(!rows.length) return null;
+  if(rows.some(r => r.tag === "CHAR" && /ANSEL/i.test(r.val)))
+    warn.push("This file says it is ANSEL, an old encoding — accented letters may come in wrong.");
+
+  /* stitch continuations back together before anything else reads them */
+  const flat = [];
+  for(const r of rows){
+    if((r.tag === "CONC" || r.tag === "CONT") && flat.length){
+      const last = flat[flat.length - 1];
+      last.val += (r.tag === "CONT" ? "\n" : "") + r.val;
+      continue;
+    }
+    flat.push(r);
+  }
+
+  let cur = null, sub = null;
+  const seen = {};
+  const nid = {};                                     // @I1@ → our own id
+  for(const r of flat){
+    if(r.lv === 0){
+      cur = r.tag === "INDI" || r.tag === "FAM" ? {kind:r.tag, ref:r.id, f:{}, list:{}} : null;
+      if(cur){ seen[r.id] = cur; }
+      sub = null;
+      continue;
+    }
+    if(!cur) continue;
+    if(r.lv === 1){
+      sub = r.tag;
+      if(r.tag === "FAMC" || r.tag === "FAMS" || r.tag === "CHIL"){
+        (cur.list[r.tag] = cur.list[r.tag] || []).push({ref:r.val.trim()});
+      } else if(cur.f[r.tag] == null) cur.f[r.tag] = r.val.trim();
+      else cur.f[r.tag] += "\n" + r.val.trim();
+      continue;
+    }
+    /* level two and deeper belong to whichever fact is open */
+    const key = sub + "." + r.tag;
+    if(sub === "FAMC" && (r.tag === "PEDI" || r.tag === "_KIND")){
+      const l = cur.list.FAMC; if(l && l.length) l[l.length - 1].pedi = r.val.trim().toLowerCase();
+      continue;
+    }
+    if(cur.f[key] == null) cur.f[key] = r.val.trim();
+  }
+
+  const nameOf = v => {
+    const m = String(v || "").match(/^([^/]*)\/([^/]*)\/?(.*)$/);
+    return m ? {first:m[1].trim(), last:(m[2] || "").trim()}
+             : {first:String(v || "").trim(), last:""};
+  };
+  let n = 0;
+  for(const ref in seen){
+    const rec = seen[ref];
+    if(rec.kind !== "INDI") continue;
+    const id = "p" + (++n);
+    nid[ref] = id;
+    const nm = nameOf(rec.f.NAME);
+    const givn = rec.f["NAME.GIVN"], surn = rec.f["NAME.SURN"];
+    people[id] = {
+      id, first: givn || nm.first, last: surn || nm.last, maiden: "",
+      sex: /^[FM]$/.test(rec.f.SEX || "") ? rec.f.SEX : "",
+      birth: unGedDate(rec.f["BIRT.DATE"]),
+      death: unGedDate(rec.f["DEAT.DATE"]),
+      dead: !!(rec.f.DEAT != null || rec.f["DEAT.DATE"]),
+      place: rec.f["BIRT.PLAC"] || rec.f["RESI.PLAC"] || "",
+      occupation: rec.f.OCCU || "",
+      notes: /^@[^@]+@$/.test(rec.f.NOTE || "") ? "" : (rec.f.NOTE || ""),
+      photo: ""
+    };
+    /* a second NAME marked "married" means the first one was her birth name */
+    if(rec.f["NAME.TYPE"] === "married" && rec.f.NAME.includes("\n")){
+      const two = rec.f.NAME.split("\n");
+      const birthName = nameOf(two[0]), married = nameOf(two[1]);
+      if(married.last && birthName.last && married.last !== birthName.last){
+        people[id].maiden = birthName.last;
+        people[id].last = married.last;
+      }
+    }
+  }
+  let m = 0;
+  for(const ref in seen){
+    const rec = seen[ref];
+    if(rec.kind !== "FAM") continue;
+    const uid = "u" + (++m);
+    const kids = (rec.list.CHIL || []).map(c => nid[c.ref]).filter(Boolean);
+    unions[uid] = {
+      id: uid,
+      a: nid[rec.f.HUSB] || null,
+      b: nid[rec.f.WIFE] || null,
+      status: rec.f._UNION === "partners" ? "partners" : "married",
+      date: unGedDate(rec.f["MARR.DATE"]),
+      place: rec.f["MARR.PLAC"] || "",
+      divorced: rec.f.DIV != null && !/^N$/i.test(rec.f.DIV || ""),
+      children: kids
+    };
+    seen[ref].uid = uid;
+  }
+  /* adoption comes from the child's side, where GEDCOM records it */
+  for(const ref in seen){
+    const rec = seen[ref];
+    if(rec.kind !== "INDI") continue;
+    (rec.list.FAMC || []).forEach(fc => {
+      const fam = seen[fc.ref];
+      if(!fam || !fam.uid) return;
+      const u = unions[fam.uid], me = nid[ref];
+      if(!u || !me) return;
+      if(!u.children.includes(me)) u.children.push(me);
+      if(fc.pedi && fc.pedi !== "birth"){
+        const k = fc.pedi === "foster" ? "foster" : fc.pedi === "step" ? "step" : "adopted";
+        u.kinds = u.kinds || {};
+        u.kinds[me] = k;
+      }
+    });
+  }
+  const count = Object.keys(people).length;
+  if(!count) return null;
+  return {doc:{people, unions, meta:{title:"", subtitle:"", note:""}, seq:count + 1},
+          warn, families: Object.keys(unions).length};
+}
+function importGEDCOM(){
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = ".ged,.gedcom,text/plain";
+  inp.addEventListener("change", () => {
+    const f = inp.files && inp.files[0]; if(!f) return;
+    const fr = new FileReader();
+    fr.onload = () => {
+      let out = null;
+      try { out = parseGED(fr.result); } catch(e){ out = null; }
+      if(!out) return toast("No people could be read out of that file", true);
+      const n = Object.keys(out.doc.people).length;
+      const mine = Object.keys(S.people).length;
+      openModal(`
+        <div class="modal" style="width:min(100%,470px)">
+          <div class="modal-head"><div><h2>${n} people read</h2>
+            <p>${esc(f.name)} — ${n} people and ${out.families} families.
+            ${mine ? "You already have <b>" + mine + "</b> here." : ""}</p></div></div>
+          <div class="modal-body">
+            ${out.warn.map(w => `<div class="notice">${esc(w)}</div>`).join("")}
+            <div class="rel">
+              ${mine ? `<button class="rel-item" style="width:100%;text-align:left" data-mode="merge">
+                <span class="txt"><span class="nm">Merge into mine</span>
+                <span class="meta">adds anyone new, fills in blanks, keeps what you have</span></span></button>` : ""}
+              <button class="rel-item" style="width:100%;text-align:left" data-mode="replace">
+                <span class="txt"><span class="nm">${mine ? "Open theirs instead" : "Open it"}</span>
+                <span class="meta">${mine ? "replaces what is on screen" : "starts your tree from this file"}</span></span></button>
+            </div>
+            <div class="mono" style="font-size:10.5px;color:var(--ink-3);margin-top:12px;line-height:1.6">
+              Photographs are not carried in a GEDCOM — it points at files on the
+              computer that wrote it. Add them here afterwards.
+            </div>
+          </div>
+          <div class="modal-foot"><span class="spring"></span><button class="btn" data-close>Cancel</button></div>
+        </div>`);
+      $("#modalMount").addEventListener("click", e => {
+        const b = e.target.closest("[data-mode]"); if(!b) return;
+        closeModal();
+        importDoc(out.doc, b.dataset.mode);
+        toast(n + " people in from GEDCOM");
+      });
+    };
+    fr.readAsText(f);
+  });
+  inp.click();
+}
+
 async function exportJSON(){
   const doc = JSON.stringify({app:"heirloom", version:1, saved:new Date().toISOString(), data:S}, null, 1);
   const ok = await offer(slug() + ".json", doc, "application/json");
@@ -6037,6 +6521,16 @@ function fileDialog(){
             <span class="txt"><span class="nm">Load from pasted text</span>
             <span class="meta">for data copied out earlier</span></span></button>
         </div>
+        <fieldset><legend>Other genealogy programs</legend>
+          <div class="rel">
+            <button class="rel-item" style="width:100%;text-align:left" id="fGedIn">
+              <span class="txt"><span class="nm">Import a GEDCOM</span>
+              <span class="meta">.ged from Ancestry, FamilySearch, MyHeritage, Gramps…</span></span></button>
+            <button class="rel-item" style="width:100%;text-align:left" id="fGedOut">
+              <span class="txt"><span class="nm">Export a GEDCOM</span>
+              <span class="meta">takes your family anywhere else that reads one</span></span></button>
+          </div>
+        </fieldset>
         <fieldset><legend>Spreadsheet</legend>
           <div class="rel">
             <button class="rel-item" style="width:100%;text-align:left" id="fSheetIn">
@@ -6068,6 +6562,8 @@ function fileDialog(){
   $("#fMerge").addEventListener("click", () => { closeModal(); importJSON("merge"); });
   $("#fShare").addEventListener("click", () => { closeModal(); shareDialog(); });
   $("#fCollect").addEventListener("click", () => { closeModal(); collectDialog(); });
+  $("#fGedIn").addEventListener("click", () => { closeModal(); importGEDCOM(); });
+  $("#fGedOut").addEventListener("click", () => { closeModal(); exportGEDCOM(); });
   $("#fSheetIn").addEventListener("click", () => { closeModal(); importSheet(); });
   $("#fSheetOut").addEventListener("click", () => { closeModal(); exportXLSX(); });
   $("#fSheetTpl").addEventListener("click", () => { closeModal(); downloadTemplate("xlsx"); });
@@ -6902,7 +7398,7 @@ function shareDialog(){
               + "and add what you know:" + String.fromCharCode(10) + url;
     window.open("https://wa.me/?text=" + encodeURIComponent(msg), "_blank", "noopener");
   });
-  $("#shPage").addEventListener("click", () => { closeModal(); exportLiving(true); });
+  $("#shPage").addEventListener("click", () => { closeModal(); gate("page", () => exportLiving(true)); });
   $("#shFile").addEventListener("click", async () => {
     const doc = JSON.stringify({app:"heirloom", version:1, data:S}, null, 1);
     if(await offer(slug() + ".json", doc, "application/json"))
@@ -7706,7 +8202,7 @@ function helpDialog(){
       <p>Built for filling in at a table with the family talking over each other.</p></div></div>
     <div class="modal-body">
       <div class="keys">
-        <span class="k"><kbd>1</kbd>–<kbd>5</kbd></span><span>Switch view — chart, tree, fan, timeline, register</span>
+        <span class="k"><kbd>1</kbd>–<kbd>6</kbd></span><span>Switch view — chart, tree, fan, timeline, register, in-laws</span>
         <span class="k"><kbd>N</kbd></span><span>Add a person and start typing their name</span>
         <span class="k"><kbd>F</kbd></span><span>Fit the whole chart on screen</span>
         <span class="k"><kbd>/</kbd></span><span>Jump to the search box</span>

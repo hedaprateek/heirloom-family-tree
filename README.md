@@ -34,6 +34,13 @@ Handled properly: remarriages, divorces and separations, single parents, unknown
 partners, adopted-in spouses, and people whose own family sits elsewhere on the
 chart (a faint dashed line runs to them rather than duplicating the card).
 
+**Adopted, fostered and step-children.** Every child in the inspector carries a
+broken-link button saying how they joined that family, and a chip on the row once
+it is anything but birth. Someone who belongs to two families shows both — the
+family they were born to first, the other under a rule naming it — and a child of
+a second marriage can be moved to the right one. Broken lines on the chart, the
+way a register has always shown it.
+
 Scope it to the **descendants** of a chosen person, their **ancestors**, or
 **everyone** with unconnected families side by side.
 
@@ -203,10 +210,24 @@ open the family on their phone.
 **Ink and paper** — full colour or black &amp; white (the whole palette collapses
 to greys for cheap printing), on white, warm cream, or transparent for export.
 
-**Files** — vector **PDF** via Print ▸ *Save as PDF* (set margins to **None**
-and turn **headers and footers off**); **PNG** at 150/300/600 dpi sized to the
-paper you chose; **SVG**; **Excel** or **CSV** (see below); and the raw
-**family file** as JSON.
+**Files** — **PDF**, written by Heirloom itself rather than left to the browser:
+the exact paper size you chose, the trim and bleed boxes a press asks for,
+hairline corner marks, one page per sheet of a mural, and the resolution stepping
+down rather than failing on an A1. Send that file to a print shop as it is.
+
+The artwork inside it is a high-resolution picture rather than vector text, and
+that is on purpose. Devanagari cannot be set down glyph by glyph — the matras
+move and the conjuncts join, and only a text engine knows how. The browser has
+one, and has already used it to draw the chart; using what it produced is the
+only way every name stays right in every script.
+
+Also **PNG** at 150/300/600 dpi sized to the paper you chose; **SVG**; a **living
+page** (below); **GEDCOM**, **Excel** or **CSV**; and the raw **family file** as
+JSON.
+
+The sheet also **turns itself** — a chart wider than it is tall lands on a
+landscape sheet, rather than sitting as a stamp in a field of white — until you
+choose an orientation yourself.
 
 ## Having it printed for you
 
@@ -236,6 +257,28 @@ it yourself instead and nothing leaves the browser, as always.
 Everything configurable — the number it messages, the list of sizes, prices, and
 an optional payment link — sits in one `PRINT_SHOP` object near the top of
 `index.html`.
+
+## A living page you can send
+
+**Living page**, in the print dialog and in Share, writes one self-contained HTML
+file — around thirty kilobytes for a family of thirty, more with photographs. It
+opens on any phone with no app and no internet, and it is not a picture: pinch it,
+tap anyone to read their life, and step through to their parents and children.
+There is a search box, and it reads by keyboard and screen reader too.
+
+Every copy carries the studio credit and a link back, so a family group passing it
+around is the only advertising this needs.
+
+## Other genealogy programs
+
+**File ▸ Import a GEDCOM** reads the `.ged` that Ancestry, FamilySearch,
+MyHeritage, Gramps and the rest all export — names, sexes, dates, places,
+occupations, notes, marriages, divorces and adoptions, with `ABT 1912` arriving as
+`c. 1912` and continued notes joined back together. **File ▸ Export a GEDCOM**
+writes one out, so a family can leave as easily as it arrived.
+
+Photographs stay behind in both directions: a GEDCOM points at image files sitting
+on the computer that wrote it, which whoever receives it does not have.
 
 ## Spreadsheets
 
@@ -327,6 +370,23 @@ system font. Hindi and English names can sit side by side in the same tree.
 
 The interface itself is still in English.
 
+## What it costs
+
+Building the tree is free, and so is getting your own names back out — the
+**family file**, the **spreadsheet** and the **GEDCOM** are never locked. Holding
+somebody's own grandmother to ransom is not a business.
+
+One payment of **₹199** covers one family for good: the PDF, the image, the vector
+file, the living page and printing, however many times you make them and however
+big. Pay by UPI and type the reference in, or by card once a Razorpay key is set.
+Everything configurable sits in the `PAY` object near the top of `index.html`, and
+`enabled: false` turns the whole thing off.
+
+Without a server of your own nothing can truly be verified, and that is a
+deliberate trade: someone who knows their way around a browser console can let
+themselves through. The people this is built for will not, and the app has never
+needed a backend.
+
 ## Your data
 
 Everything lives in your own browser as you type. Nothing is uploaded anywhere.
@@ -338,7 +398,7 @@ Clipboard copy/paste works as a fallback where downloads are blocked.
 
 | | |
 |---|---|
-| <kbd>1</kbd>–<kbd>5</kbd> | switch view — chart, tree, fan, timeline, register |
+| <kbd>1</kbd>–<kbd>6</kbd> | switch view — chart, tree, fan, timeline, register, in-laws |
 | <kbd>N</kbd> | add a person and start typing their name |
 | <kbd>F</kbd> | fit the whole chart on screen |
 | <kbd>/</kbd> | jump to search |
