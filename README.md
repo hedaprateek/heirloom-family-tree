@@ -372,15 +372,23 @@ The interface itself is still in English.
 
 ## What it costs
 
-Building the tree is free, and so is getting your own names back out — the
-**family file**, the **spreadsheet** and the **GEDCOM** are never locked. Holding
-somebody's own grandmother to ransom is not a business.
+**Nothing today.** Everything is free and open: build the tree, print it, save the
+PDF, send the living page. A wall in front of something nobody has heard of stops
+the only thing it needs, which is people using it and telling someone.
 
-One payment of **₹199** covers one family for good: the PDF, the image, the vector
-file, the living page and printing, however many times you make them and however
-big. Pay by UPI and type the reference in, or by card once a Razorpay key is set.
-Everything configurable sits in the `PAY` object near the top of `index.html`, and
-`enabled: false` turns the whole thing off.
+The gate is built and waiting. When the asking is fair, set `enabled: true` in the
+`PAY` object near the top of `index.html` — or just open the page with **`?pay=on`**
+to see it, and **`?pay=off`** to put it away again; the choice is remembered on that
+device.
+
+Once it is on, one payment of **₹199** covers one family for good: the PDF, the
+image, the vector file, the living page and printing, however many times you make
+them and however big. Pay by UPI and type the reference in, or by card once a
+Razorpay key is set.
+
+Even then, your family's own data is never locked. The **family file**, the
+**spreadsheet** and the **GEDCOM** stay free, paid or not. Holding somebody's own
+grandmother to ransom is not a business.
 
 Without a server of your own nothing can truly be verified, and that is a
 deliberate trade: someone who knows their way around a browser console can let

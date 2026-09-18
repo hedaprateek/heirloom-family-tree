@@ -1221,7 +1221,13 @@ const PRINT_SHOP = {
    the alternative is a backend, and this app has never needed one.
    ──────────────────────────────────────────────────────── */
 const PAY = {
-  enabled : true,
+  /* Off while nobody has heard of this yet: a wall in front of an unknown
+     thing stops the one thing it needs, which is people using it and
+     telling someone. Flip this to true when the asking is fair — the gate
+     below is built and works, it is only asleep. To see it without
+     changing anything here, open the page with ?pay=on (and ?pay=off
+     again afterwards); the choice is remembered on this device. */
+  enabled : false,
   keyId   : "",                 // "rzp_live_…" — Razorpay Checkout, once you have one
   upi     : "",                 // "prateek@okicici" — the fallback, and the honest one
   price   : 199,                // rupees, once per family
@@ -6012,6 +6018,22 @@ function docId(){
 function paidList(){
   try { return JSON.parse(localStorage.getItem(PAID_KEY) || "[]"); } catch(e){ return []; }
 }
+/* ?pay=on turns the gate on for this device and remembers it, so the whole
+   thing can be tried, shown to somebody, or switched on for real without
+   touching the file. ?pay=off puts it back to sleep. */
+(function payOverride(){
+  let saved = null;
+  try { saved = localStorage.getItem(KEY + ".paywall"); } catch(e){}
+  try {
+    const q = new URLSearchParams(location.search).get("pay");
+    if(q === "on" || q === "off"){
+      saved = q;
+      try { localStorage.setItem(KEY + ".paywall", q); } catch(e){}
+    }
+  } catch(e){}
+  if(saved === "on") PAY.enabled = true;
+  else if(saved === "off") PAY.enabled = false;
+})();
 function isPaid(){
   if(!PAY.enabled) return true;
   return paidList().some(r => r.doc === (S.meta.docId || ""));
