@@ -1,7 +1,8 @@
 {
   "name": "Heirloom — Family Tree",
   "short_name": "Heirloom",
-  "description": "Build a family tree in your browser and print it as a poster. Nothing is uploaded.",
+  "id": "./",
+  "description": "Your family tree, available online and offline. Build, save and print it on your device.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

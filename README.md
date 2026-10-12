@@ -58,6 +58,20 @@ app at all.
 and years married, plus **Family facts** — longest life, eldest living, most
 children, longest marriage, and where most of the family came from.
 
+**Calendar reminders.** Under **Dates → Set up reminders**, download a calendar
+file containing yearly birthdays of living relatives and wedding anniversaries
+of living couples. Choose alerts at 9 am on the day, plus the day before or a
+week before. Import the `.ics` file into your calendar and check that alerts
+and phone notifications are enabled; some calendars apply their own settings.
+Google Calendar imports are done on a computer under *Settings → Import & export*.
+Share the same file with relatives, or use **Share file** on supported devices.
+
+Only exact, valid dates are included; incomplete or approximate dates are listed
+for you to fill in. February 29 is observed on the last day of February each year.
+The file contains names and family dates. It is a snapshot: use a separate family
+calendar and replace its imported events after edits to avoid duplicate reminders.
+No messages are sent automatically and no calendar account is connected.
+
 **Still to fill in.** The second tab in the people list is a to-do list built
 from the data — *Aisha Deshmukh · family not recorded*, *Anya Iyer · no work* —
 sorted worst first, with a count on the tab. Tap one to go straight there. A
@@ -437,9 +451,35 @@ around that person.
 
 Download `index.html` and open it. That's the whole app.
 
-The only thing it fetches from the internet is the typefaces and a small QR
-code library. Both are optional — offline you get system fonts and no QR, and
-everything else works exactly the same.
+The typefaces load from Google Fonts and are optional: offline you get system
+fonts. The QR code library is bundled locally, so QR codes work offline too.
+
+## Add an offline copy to your phone
+
+The website still works normally in your browser. **File → Use Heirloom offline**
+adds instructions and shows when the offline copy is ready.
+
+- **Android:** visit the website in Chrome and use **Add to Home Screen** in
+  Heirloom's offline dialog, or Chrome's **Add to Home screen / Install** menu.
+- **iPhone:** visit in Safari and use **Share → Add to Home Screen → Add**.
+
+Open the home screen icon once with internet and wait for **Offline copy ready**.
+Then reopen it in airplane mode. The family tree, editing, import/export, printing,
+calendar files, QR codes, guide and privacy page work offline. New web fonts and
+sending links to relatives require internet. There is no separate native app.
+
+Save a family file before installing. If the home screen copy has separate storage
+and opens the sample tree, import your saved family file there. Keep backups:
+clearing website data can remove your family tree and offline copy.
+
+Calendar notifications remain under **Dates → Set up reminders**. The website
+does not schedule notifications while closed; your phone's calendar handles them.
+
+Offline installation requires HTTPS (the GitHub Pages site) or localhost for
+testing. Opening `index.html` directly still works but cannot install the offline
+website cache. An updated offline version can be applied from the offline dialog.
+For a local preview on Windows, run `start.cmd` (requires Node.js). It opens
+`http://localhost:8794/`, where offline caching can be tested.
 
 ---
 

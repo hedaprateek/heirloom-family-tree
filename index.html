@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <!-- The title carries what people actually type into a search box — free,
      family tree, print, poster — and still reads like a sentence a person
      wrote. Keep it under about 60 characters or the end is cut off. -->
@@ -341,6 +341,12 @@ button{cursor:pointer;background:none;border:0;padding:0}
   color:var(--ink-3);opacity:.75;pointer-events:none;white-space:nowrap;
 }
 .credit b{font-weight:500;color:var(--ink-2)}
+.credit.stunity-credit{margin:0;padding:0;border:0;max-width:none;gap:7px;
+  text-transform:none;line-height:1.5;color:var(--ink-3);font-family:var(--f-mono);font-size:10px;letter-spacing:.08em}
+@media (display-mode:standalone){
+  #app{margin-top:env(safe-area-inset-top);height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+  .scrim{padding-top:calc(20px + env(safe-area-inset-top));padding-bottom:calc(20px + env(safe-area-inset-bottom))}
+}
 .legend{
   position:absolute;right:14px;bottom:14px;
   background:var(--panel);border:1px solid var(--line);border-radius:10px;
@@ -964,6 +970,7 @@ kbd{
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="site.webmanifest">
+<script defer src="pwa.js"></script>
 <meta name="apple-mobile-web-app-title" content="Heirloom">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta property="og:title" content="Heirloom — a family tree you can actually print">
@@ -1248,7 +1255,7 @@ kbd{
 
     <div id="relMenu" hidden></div>
 
-    <div class="credit"><span class="sc-wrap"><a class="sc-link" href="https://stunity-tech.hedaprateek.workers.dev" target="_blank" rel="noopener">Stunity Tech</a><span class="sc-card" role="note"><b>Stunity Tech</b><i>Small tools, built one at a time.</i><span class="sc-acts"><a href="https://stunity-tech.hedaprateek.workers.dev" target="_blank" rel="noopener">Site &#8599;</a><a href="mailto:prateekheda@yahoo.com">Email</a><a href="https://wa.me/919021306979" target="_blank" rel="noopener">WhatsApp</a></span></span></span> — by Prateek</div>
+    <div class="credit stunity-credit"><span class="sc-dot"></span><span><span class="sc-wrap"><a class="sc-link" href="https://stunity-tech.hedaprateek.workers.dev" target="_blank" rel="noopener">Stunity Tech</a><span class="sc-card" role="note"><b>Stunity Tech</b><i>Small tools, built one at a time.</i><span class="sc-acts"><a href="https://stunity-tech.hedaprateek.workers.dev" target="_blank" rel="noopener">Site &#8599;</a><a href="mailto:prateekheda@yahoo.com">Email</a><a href="https://wa.me/919021306979" target="_blank" rel="noopener">WhatsApp</a></span></span></span> — by <b>Prateek</b></span></div>
 
     <div class="legend" aria-hidden="true">
       <span><b>∗</b> born</span>
@@ -1284,9 +1291,8 @@ kbd{
 <div id="toasts" aria-live="polite"></div>
 <div id="printRoot"></div>
 
-<!-- QR codes for the share link and the printed poster. Optional: the app
-     works without it, offline or if the CDN is blocked. -->
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<!-- QR codes are bundled locally so sharing and printed posters work offline. -->
+<script defer src="vendor/qrcode.js"></script>
 <script>
 "use strict";
 /* ═══════════════════════════════════════════════════════════
@@ -3871,6 +3877,112 @@ function almanacDialog(){
     </div>`);
 }
 
+/** Exact dates only: a month or approximate date must never become a guessed alert. */
+function reminderDates(){
+  const events = [], missing = [];
+  function add(raw, kind, who, id){
+    const d = parseDate(raw);
+    if(!d || d.approx || !d.m || !d.d || d.m < 1 || d.m > 12 || d.d < 1
+      || d.d > new Date(Date.UTC(d.y, d.m, 0)).getUTCDate()){
+      missing.push(who); return;
+    }
+    events.push({kind, who, id, y:d.y, m:d.m, d:d.d});
+  }
+  for(const id in S.people){
+    const p = P(id);
+    if(!isDead(p)) add(p.birth, "birthday", fullName(p), "person-" + id);
+  }
+  for(const id in S.unions){
+    const u = U(id), a = u.a && P(u.a), b = u.b && P(u.b);
+    if(!a || !b || u.divorced || u.status === "partners" || isDead(a) || isDead(b)) continue;
+    add(u.date, "anniversary", fullName(a) + " & " + fullName(b), "union-" + id);
+  }
+  return {events, missing};
+}
+function calendarText(value){
+  return String(value).replace(/\\/g, "\\\\").replace(/\r\n|\r|\n/g, "\\n")
+    .replace(/;/g, "\\;").replace(/,/g, "\\,");
+}
+/** Fold by UTF-8 bytes without splitting a character (RFC 5545). */
+function calendarLine(value){
+  const encoder = new TextEncoder();
+  let line = "", bytes = 0, out = "";
+  for(const ch of value){
+    const size = encoder.encode(ch).length;
+    if(bytes + size > 75){ out += line + "\r\n"; line = " "; bytes = 1; }
+    line += ch; bytes += size;
+  }
+  return out + line;
+}
+function reminderCalendar(events, advance, now = new Date()){
+  const pad = n => String(n).padStart(2, "0");
+  const stamp = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Heirloom//Family reminders//EN",
+    "CALSCALE:GREGORIAN", "X-WR-CALNAME:" + calendarText((S.meta.title || "Heirloom") + " — family dates")];
+  for(const e of events){
+    const leap = e.m === 2 && e.d === 29;
+    let year = Math.max(now.getFullYear(), e.y);
+    const day = y => leap ? new Date(y, 2, 0).getDate() : e.d;
+    if(new Date(year, e.m - 1, day(year), 9) < now) year++;
+    const start = year + pad(e.m) + pad(day(year)) + "T090000";
+    const summary = e.who + (e.kind === "birthday" ? " — birthday" : " — wedding anniversary");
+    const description = "From your Heirloom family tree. "
+      + (e.kind === "birthday" ? "Born" : "Married") + " " + e.d + " " + MON_LONG[e.m - 1] + " " + e.y + "."
+      + (leap ? " February 29 is observed on the last day of February each year." : "");
+    lines.push("BEGIN:VEVENT", "UID:" + encodeURIComponent(e.id + "-" + e.who + "-" + e.y + "-" + e.m + "-" + e.d) + "@heirloom-family-tree",
+      "DTSTAMP:" + stamp, "DTSTART:" + start, "DURATION:PT15M",
+      "RRULE:FREQ=YEARLY;BYMONTH=" + e.m + ";BYMONTHDAY=" + (leap ? -1 : e.d),
+      "SUMMARY:" + calendarText(summary), "DESCRIPTION:" + calendarText(description), "TRANSP:TRANSPARENT");
+    for(const trigger of (advance === "week" ? ["-P7D", "PT0S"] : advance === "day" ? ["-P1D", "PT0S"] : ["PT0S"])){
+      lines.push("BEGIN:VALARM", "ACTION:DISPLAY", "TRIGGER:" + trigger,
+        "DESCRIPTION:" + calendarText(summary), "END:VALARM");
+    }
+    lines.push("END:VEVENT");
+  }
+  lines.push("END:VCALENDAR");
+  return lines.map(calendarLine).join("\r\n") + "\r\n";
+}
+function remindersDialog(){
+  const {events, missing} = reminderDates();
+  openModal(`<div class="modal">
+    <div class="modal-head"><div><h2>Remember family dates</h2>
+      <p>Yearly reminders in your calendar, even when Heirloom is closed.</p></div></div>
+    <div class="modal-body" style="line-height:1.7">
+      <p><b>${events.length} ${events.length === 1 ? "date" : "dates"} ready</b> — birthdays of living relatives and wedding anniversaries of living couples.</p>
+      <label for="reminderAdvance">Remind me at 9 am</label>
+      <select id="reminderAdvance" style="display:block;width:100%;margin:8px 0 16px">
+        <option value="day">The day before and on the day</option>
+        <option value="week">A week before and on the day</option>
+        <option value="same">On the day</option>
+      </select>
+      ${missing.length ? `<details><summary>${missing.length} ${missing.length === 1 ? "date needs" : "dates need"} an exact day, month and year</summary>
+        <p>${missing.map(esc).join("<br>")}</p><p>Fill these in on each person's card. Approximate or incomplete dates are left out.</p></details>` : ""}
+      ${events.some(e => e.m === 2 && e.d === 29) ? "<p>February 29 dates use the last day of February each year.</p>" : ""}
+      <p>Download the calendar file and import it into Apple Calendar, Outlook or
+        <a href="https://support.google.com/calendar/answer/37118" target="_blank" rel="noopener">Google Calendar</a>.
+        Google imports are done on a computer under Settings → Import &amp; export.</p>
+      <p>Check the imported events' alerts and allow calendar notifications on your phone. Some calendars use their own alert settings. Times use the calendar's local time.</p>
+      <p>Send the file to relatives so they can import it too. It contains names and family dates.
+        Use a separate family calendar: this file is a snapshot, so replace that calendar's imported events when dates change to avoid duplicates.</p>
+    </div>
+    <div class="modal-foot"><button class="btn" data-close>Close</button><span class="spring"></span>
+      <button class="btn" id="shareReminders" ${events.length ? "" : "disabled"}>Share file</button>
+      <button class="btn primary" id="downloadReminders" ${events.length ? "" : "disabled"}>Download calendar</button></div>
+  </div>`);
+  const file = () => new File([reminderCalendar(events, $("#reminderAdvance").value)],
+    "heirloom-family-reminders.ics", {type:"text/calendar;charset=utf-8"});
+  const share = $("#shareReminders");
+  share.hidden = !(navigator.canShare && navigator.canShare({files:[file()]}));
+  share.addEventListener("click", async () => {
+    try { await navigator.share({files:[file()], title:"Heirloom family reminders"}); }
+    catch(err){ if(err.name !== "AbortError") toast("Could not share. Download the file and send it instead.", true); }
+  });
+  $("#downloadReminders").addEventListener("click", async () => {
+    if(await offer("heirloom-family-reminders.ics", file(), "text/calendar;charset=utf-8"))
+      toast("Calendar downloaded — import it and check its alerts");
+  });
+}
+
 function renderRail(){
   const list = $("#railList");
   const idx = buildIndex();
@@ -3886,7 +3998,8 @@ function renderRail(){
   $("#tabDates").setAttribute("aria-pressed", ui.railTab === "dates");
   if(ui.railTab === "dates"){
     const a = almanac(), now = new Date().getFullYear();
-    list.innerHTML = '<button class="btn sm" id="factsBtn" style="width:100%;margin:4px 0 10px">Family facts</button>'
+    list.innerHTML = '<button class="btn sm primary" id="remindersBtn" style="width:100%;margin:4px 0 6px">Set up reminders</button>'
+      + '<button class="btn sm" id="factsBtn" style="width:100%;margin:4px 0 10px">Family facts</button>'
       + (a.length
         ? '<div class="rail-gen">Coming up</div>' + a.slice(0, 40).map(function(x){
             const yrs = x.since ? now - x.since : 0;
@@ -3900,7 +4013,7 @@ function renderRail(){
               + '<span class="what">' + esc(what) + '</span></button>';
           }).join("")
         : '<div class="gap-done">No birthdays or anniversaries yet.<br>'
-          + 'Add a full date of birth, or a marriage year, and they gather here.</div>');
+          + 'Add a date of birth or marriage with a month, and they gather here.</div>');
     return;
   }
   if(ui.railTab === "gaps"){
@@ -7099,6 +7212,52 @@ function normalise(d){
   return out;
 }
 
+function offlineStatus(){
+  const state = window.HeirloomOffline && window.HeirloomOffline.state;
+  if(!state || !state.supported) return "Open the website online to set up your phone's offline copy.";
+  if(state.error) return "Could not save the offline copy. Check your connection and reload to try again.";
+  if(!state.ready) return "Saving the offline copy… Keep this page open with internet until it is ready.";
+  return navigator.onLine ? "Offline copy ready — you can open Heirloom without internet." : "You're offline — your saved family tree is available.";
+}
+function updateOfflineDialog(){
+  const status = $("#offlineStatus"); if(!status) return;
+  status.textContent = offlineStatus();
+  const state = window.HeirloomOffline && window.HeirloomOffline.state;
+  $("#offlineInstall").hidden = !state || !state.canInstall || state.installed;
+  $("#offlineUpdate").hidden = !state || !state.update;
+  $("#offlineInstalled").hidden = !state || !state.installed;
+}
+window.addEventListener("heirloom-offline-change", updateOfflineDialog);
+function offlineDialog(){
+  openModal(`<div class="modal" style="width:min(100%,500px)">
+    <div class="modal-head"><div><h2>Take your family tree offline</h2>
+      <p>Keep using the website, or add a copy to your phone's home screen.</p></div></div>
+    <div class="modal-body" style="line-height:1.7">
+      <p id="offlineStatus" role="status"></p>
+      <p id="offlineInstalled" hidden><b>Heirloom is open from your home screen.</b></p>
+      <p><b>Android:</b> open Heirloom in Chrome. Tap <b>Add to Home Screen</b> below if available, or use Chrome's menu → <b>Add to Home screen</b> / <b>Install</b>.</p>
+      <p><b>iPhone:</b> open Heirloom in Safari. Tap <b>Share → Add to Home Screen → Add</b>.</p>
+      <p>Open the new home screen icon once with internet and wait for “Offline copy ready” here. Then try airplane mode and reopen it.</p>
+      <p>Your family tree, editing, family files, printing and calendar exports work offline. Sharing links with other people and loading new web fonts need internet.</p>
+      <p>Before installing, use <b>File → Save family file</b> to keep a backup. If the home screen copy opens with the sample family, use <b>File → Open a family file</b> to bring yours in. Save backups regularly; clearing website data can remove your tree and offline copy.</p>
+      <p>Birthday and anniversary alerts use <b>Dates → Set up reminders</b> and your phone's calendar.</p>
+    </div>
+    <div class="modal-foot"><button class="btn" data-close>Close</button><span class="spring"></span>
+      <button class="btn" id="offlineUpdate" hidden>Update offline copy</button>
+      <button class="btn primary" id="offlineInstall" hidden>Add to Home Screen</button></div>
+  </div>`);
+  updateOfflineDialog();
+  $("#offlineInstall").addEventListener("click", async()=>{
+    try {await window.HeirloomOffline.install();updateOfflineDialog();}
+    catch(error){$("#offlineStatus").textContent="Use your browser's menu to add Heirloom to your home screen.";}
+  });
+  $("#offlineUpdate").addEventListener("click",()=>{
+    // Flush a pending edit before reloading the offline website version.
+    save();
+    setTimeout(()=>window.HeirloomOffline.applyUpdate(),500);
+  });
+}
+
 function fileDialog(){
   openModal(`
     <div class="modal" style="width:min(100%,480px)">
@@ -7106,6 +7265,9 @@ function fileDialog(){
         <p>Everything lives in this browser as you type. Save a file to keep a copy, move it to another computer, or send it round the family.</p></div></div>
       <div class="modal-body">
         <div class="rel">
+          <button class="rel-item" style="width:100%;text-align:left" id="fOffline">
+            <span class="txt"><span class="nm">Use Heirloom offline</span>
+            <span class="meta">add it to your phone's home screen</span></span></button>
           <button class="rel-item" style="width:100%;text-align:left" id="fSave">
             <span class="txt"><span class="nm">Save family file</span>
             <span class="meta">${Object.keys(S.people).length} people · .json</span></span></button>
@@ -7174,6 +7336,7 @@ function fileDialog(){
   $("#fSheetIn").addEventListener("click", () => { closeModal(); importSheet(); });
   $("#fSheetOut").addEventListener("click", () => { closeModal(); exportXLSX(); });
   $("#fSheetTpl").addEventListener("click", () => { closeModal(); downloadTemplate("xlsx"); });
+  $("#fOffline").addEventListener("click", offlineDialog);
   $("#fCopy").addEventListener("click", async () => {
     const doc = JSON.stringify({app:"heirloom", version:1, data:S});
     try { await navigator.clipboard.writeText(doc); toast("Copied — paste it somewhere safe"); }
@@ -8279,12 +8442,13 @@ function save(){
       const tag = $("#savedTag");
       if(tag){ tag.classList.add("show"); clearTimeout(save.t);
                save.t = setTimeout(() => tag.classList.remove("show"), 1400); }
-      localStorage.setItem(KEY, JSON.stringify({data:S, ui:{
+      const saved = JSON.stringify({data:S, ui:{
         view:ui.view, mode:ui.mode, focus:ui.focus, style:ui.style,
         gens:ui.gens, softInlaw:ui.softInlaw, dates:ui.dates,
         treeStyle:ui.treeStyle, textSize:ui.textSize, isSample:ui.isSample,
         leaves:ui.leaves
-      }, origin:ORIGIN}));
+      }, origin:ORIGIN});
+      localStorage.setItem(KEY, saved);
     } catch(e){
       toast("Browser storage is full — save a family file", true);
     }
@@ -8573,6 +8737,7 @@ $("#q").addEventListener("input", e => {
 $("#railList").addEventListener("click", e => {
   if(e.target.closest("#askAll")) fillInMode();
   else if(e.target.closest("#factsBtn")) almanacDialog();
+  else if(e.target.closest("#remindersBtn")) remindersDialog();
 });
 $("#btnUndo").addEventListener("click", undo);
 const TEXT_SIZES = [1, 1.15, 1.3];
